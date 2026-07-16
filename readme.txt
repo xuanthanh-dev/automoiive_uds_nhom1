@@ -1,1 +1,1 @@
-day la repo cua nhom 1
+day la repo automotive thực tập hè cua nhom 1
