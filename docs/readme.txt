@@ -1,0 +1,1 @@
+For Markdown (.md) files, open it and use combination "CTRL + SHIFT + V" to view
