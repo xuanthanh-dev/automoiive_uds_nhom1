@@ -1,0 +1,2291 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bootcamp ECU Automotive - STM32, CAN & UDS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --fpt-orange: #f37021;
+            --fpt-blue: #034ea2;
+            --fpt-green: #50b848;
+            --fpt-grey-light: #f8fafc;
+            --fpt-grey-dark: #e2e8f0;
+            --text-main: #1e293b;
+            --text-sub: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            background-color: #0f172a;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+            padding: 20px;
+        }
+
+        /* Slide Frame Container */
+        .slide-container {
+            width: 1280px;
+            height: 720px;
+            background-color: #ffffff;
+            position: relative;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            border-radius: 12px;
+            overflow: hidden;
+            display: none;
+            flex-direction: column;
+        }
+
+        .slide-container.active {
+            display: flex;
+        }
+
+        /* Slide Layout Base Colors and Structure */
+        .slide-header {
+            padding: 50px 80px 10px 80px;
+            flex-shrink: 0;
+        }
+
+        .slide-title {
+            font-size: 38px;
+            font-weight: 800;
+            color: var(--fpt-blue);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+            line-height: 1.2;
+        }
+
+        .title-underline {
+            width: 120px;
+            height: 6px;
+            background-color: var(--fpt-orange);
+            border-radius: 3px;
+        }
+
+        .content-area {
+            flex-grow: 1;
+            padding: 10px 80px 80px 80px;
+            color: var(--text-main);
+            overflow-y: auto;
+        }
+
+        /* FOOTER */
+        .footer {
+            position: absolute;
+            bottom: 30px;
+            left: 80px;
+            right: 80px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 15px;
+            font-size: 14px;
+            color: var(--text-sub);
+            z-index: 10;
+        }
+
+        .footer-brand {
+            color: var(--fpt-orange);
+            font-weight: 700;
+        }
+
+        /* TITLE SLIDE LAYOUT */
+        .title-slide {
+            background-color: #f1f5f9;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 0 100px;
+        }
+
+        .title-slide .logo {
+            position: absolute;
+            top: 60px;
+            left: 100px;
+            height: 45px;
+        }
+
+        .title-slide h1 {
+            font-size: 50px;
+            font-weight: 900;
+            color: #0f172a;
+            line-height: 1.15;
+            z-index: 2;
+            text-transform: uppercase;
+        }
+
+        .title-slide h1 span {
+            color: var(--fpt-orange);
+        }
+
+        .title-slide .info-box {
+            margin-top: 40px;
+            border-left: 10px solid var(--fpt-orange);
+            padding-left: 30px;
+            z-index: 2;
+        }
+
+        .title-slide .year-bg {
+            position: absolute;
+            right: 60px;
+            bottom: 60px;
+            font-size: 200px;
+            font-weight: 900;
+            color: rgba(15, 23, 42, 0.03);
+            line-height: 1;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        /* SECTION DIVIDER LAYOUT */
+        .section-divider {
+            background-color: #ffffff;
+            justify-content: center;
+            padding-left: 120px;
+        }
+
+        .section-divider .num {
+            font-size: 120px;
+            font-weight: 900;
+            color: var(--fpt-orange);
+            opacity: 0.95;
+            line-height: 1;
+        }
+
+        .section-divider .name {
+            font-size: 54px;
+            font-weight: 800;
+            color: var(--fpt-blue);
+            text-transform: uppercase;
+            margin-top: 10px;
+            line-height: 1.2;
+        }
+
+        .section-divider .line {
+            width: 180px;
+            height: 8px;
+            background-color: var(--fpt-grey-dark);
+            margin-top: 25px;
+            border-radius: 4px;
+        }
+
+        /* GRID COMPONENTS */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            height: 100%;
+            margin-top: 20px;
+        }
+
+        .tile {
+            background: var(--fpt-grey-light);
+            padding: 30px;
+            border-radius: 8px;
+            border-top: 4px solid var(--fpt-orange);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
+        .tile .icon {
+            font-size: 42px;
+            color: var(--fpt-blue);
+            margin-bottom: 20px;
+        }
+
+        .tile h3 {
+            font-size: 22px;
+            margin-bottom: 12px;
+            color: var(--fpt-blue);
+        }
+
+        .tile p {
+            font-size: 16px;
+            color: #475569;
+            line-height: 1.6;
+        }
+
+        /* TABLES */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        th {
+            background: #f1f5f9;
+            color: var(--fpt-blue);
+            padding: 16px 20px;
+            text-align: left;
+            border-bottom: 3px solid var(--fpt-orange);
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        td {
+            padding: 14px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 16px;
+            color: #334155;
+            line-height: 1.5;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        /* TWO COLUMN COMPONENT */
+        .two-column {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 50px;
+            height: 100%;
+            align-items: center;
+        }
+
+        .img-box {
+            border-radius: 8px;
+            overflow: hidden;
+            height: 380px;
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .img-box img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        /* NAVIGATION CONTROL PANEL */
+        .nav-controls {
+            position: fixed;
+            bottom: 30px;
+            background: rgba(15, 23, 42, 0.9);
+            padding: 12px 24px;
+            border-radius: 40px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            color: white;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-btn {
+            cursor: pointer;
+            color: var(--fpt-orange);
+            font-size: 22px;
+            border: none;
+            background: none;
+            transition: transform 0.1s ease, color 0.1s ease;
+        }
+
+        .nav-btn:hover {
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .nav-btn:active {
+            transform: scale(0.95);
+        }
+
+        .nav-info {
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            min-width: 110px;
+            text-align: center;
+        }
+
+        /* Print Layout Styles */
+        @media print {
+            body {
+                background: none !important;
+                padding: 0 !important;
+            }
+            .slide-container {
+                display: flex !important;
+                page-break-after: always !important;
+                box-shadow: none !important;
+                margin: 0 !important;
+                border-radius: 0 !important;
+                width: 100% !important;
+                height: 100vh !important;
+            }
+            .nav-controls {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- SLIDE CONTAINERS -->
+
+<div class="slide-container title-slide" id="slide1">
+    <img src="https://soict.hust.edu.vn/wp-content/uploads/fpt-automotive.jpg" class="logo" alt="FPT Logo">
+    <h1>BOOTCAMP 01:<br><span>AUTOMOTIVE INTRODUCTION & WORKING METHODS</span></h1>
+    <div class="info-box">
+        <p style="font-size: 26px; font-weight: 700; color: #0f172a;">Dự án: Xây dựng ECU chẩn đoán trên STM32 (CAN & UDS)</p>
+        <p style="font-size: 18px; color: #475569; margin-top: 10px;">Hanoi, 2026 | Phase 2 - Thực tập hè 2026</p>
+    </div>
+    <div class="year-bg">2026</div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span class="footer-brand">fpt.auto</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide2">
+    <div class="slide-header">
+        <div class="slide-title">Agenda Buổi 1: Giới thiệu & Cách làm việc</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-left: 6px solid var(--fpt-orange); border-radius: 4px;">
+                <h4 style="color: var(--fpt-blue); font-size: 20px; margin-bottom: 10px;">01. Tổng quan Automotive ECU</h4>
+                <p style="font-size: 16px; margin: 0;">Hiểu về hệ thống điện tử trên xe, khái niệm ECU và vai trò của Diagnostics (Chẩn đoán).</p>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-left: 6px solid var(--fpt-blue); border-radius: 4px;">
+                <h4 style="color: var(--fpt-blue); font-size: 20px; margin-bottom: 10px;">02. Quy trình làm việc & Git Strategy</h4>
+                <p style="font-size: 16px; margin: 0;">Cách quản lý task, cấu trúc file dự án chuẩn, Gitflow và quy tắc Commit chuẩn quốc tế.</p>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-left: 6px solid var(--fpt-orange); border-radius: 4px;">
+                <h4 style="color: var(--fpt-blue); font-size: 20px; margin-bottom: 10px;">03. Setup Môi trường phát triển</h4>
+                <p style="font-size: 16px; margin: 0;">Giới thiệu kit STM32, phần mềm STM32CubeIDE, CubeMX và các driver nạp chương trình.</p>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-left: 6px solid var(--fpt-blue); border-radius: 4px;">
+                <h4 style="color: var(--fpt-blue); font-size: 20px; margin-bottom: 10px;">04. Live Demo thực hành tại lớp</h4>
+                <p style="font-size: 16px; margin: 0;">Hướng dẫn từng bước từ Clone template, Import, Code nháy LED, Nạp chip, và Tạo Pull Request đầu tiên.</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 2</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide3">
+    <div class="slide-header">
+        <div class="slide-title">Hệ sinh thái ECU trong xe hơi</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <p style="font-size: 18px; line-height: 1.6; margin-bottom: 20px;">
+                    Một chiếc xe hiện đại có hơn 100 ECUs kết nối với nhau qua hệ thống Gateway tổng. ECU chúng ta xây dựng đóng vai trò là một <strong>Diagnostic Server</strong> kết nối qua cổng OBD-II.
+                </p>
+                <ul style="padding-left: 25px; line-height: 2; font-size: 18px;">
+                    <li>Quản lý trạng thái hệ thống.</li>
+                    <li>Lưu trữ lỗi (DTC - Diagnostic Trouble Codes).</li>
+                    <li>Giao tiếp chẩn đoán chuẩn hóa thông qua cổng OBD-II bằng giao thức UDS.</li>
+                </ul>
+            </div>
+            <div style="height: 380px;">
+                <!-- Clean Inline SVG replace broken Gateway Diagram -->
+                <svg viewBox="0 0 500 300" style="width:100%; height:100%; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-family:'Inter',sans-serif;">
+                    <rect x="200" y="110" width="100" height="60" rx="6" fill="#034ea2" />
+                    <text x="250" y="146" fill="white" font-weight="bold" font-size="13" text-anchor="middle">GATEWAY</text>
+                    
+                    <rect x="20" y="115" width="90" height="50" rx="4" fill="#e2e8f0" stroke="#cbd5e1" stroke-width="2"/>
+                    <text x="65" y="145" fill="#334155" font-weight="bold" font-size="11" text-anchor="middle">OBD-II Port</text>
+                    <path d="M 110 140 L 200 140" stroke="#f37021" stroke-width="3" stroke-dasharray="5,5"/>
+                    <text x="155" y="130" fill="#f37021" font-size="10" font-weight="bold" text-anchor="middle">UDS Protocol</text>
+                    
+                    <rect x="370" y="30" width="100" height="45" rx="4" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+                    <text x="420" y="58" fill="#334155" font-weight="bold" font-size="11" text-anchor="middle">Engine ECU</text>
+                    <path d="M 250 110 L 250 50 L 370 50" stroke="#50b848" stroke-width="3"/>
+                    
+                    <rect x="370" y="210" width="100" height="45" rx="4" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+                    <text x="420" y="238" fill="#334155" font-weight="bold" font-size="11" text-anchor="middle">Body ECU</text>
+                    <path d="M 250 170 L 250 230 L 370 230" stroke="#3b82f6" stroke-width="3"/>
+                    
+                    <text x="310" y="42" fill="#50b848" font-size="10" font-weight="bold">Powertrain CAN</text>
+                    <text x="310" y="222" fill="#3b82f6" font-size="10" font-weight="bold">Body CAN</text>
+                </svg>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 3</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide4">
+    <div class="slide-header">
+        <div class="slide-title">Xe hơi hiện đại: Siêu máy tính di động</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <p style="font-size: 18px; line-height: 1.6; margin-bottom: 20px;">
+                    Một chiếc xe ô tô hiện đại không còn chỉ là cơ khí thuần túy. Nó được định nghĩa bởi phần mềm (<strong>Software-Defined Vehicle - SDV</strong>).
+                </p>
+                <ul style="padding-left: 20px; font-size: 18px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;"><i class="fa-solid fa-microchip" style="color: var(--fpt-orange); margin-right: 10px;"></i> <strong>Hơn 100+ ECU:</strong> Mỗi ECU đảm nhận một nhiệm vụ riêng biệt (Động cơ, Phanh, Túi khí, Giải trí...).</li>
+                    <li style="margin-bottom: 10px;"><i class="fa-solid fa-network-wired" style="color: var(--fpt-blue); margin-right: 10px;"></i> <strong>Mạng truyền thông:</strong> Các ECU giao tiếp với nhau qua CAN, LIN, FlexRay, Automotive Ethernet.</li>
+                    <li style="margin-bottom: 10px;"><i class="fa-solid fa-shield-halved" style="color: var(--fpt-green); margin-right: 10px;"></i> <strong>Yêu cầu khắt khe:</strong> Phải hoạt động thời gian thực (Real-time), an toàn tuyệt đối và có khả năng tự chẩn đoán lỗi.</li>
+                </ul>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                <i class="fa-solid fa-car" style="font-size: 80px; color: var(--fpt-blue); margin-bottom: 20px;"></i>
+                <h4 style="color: var(--fpt-orange); margin-bottom: 10px;">Mạng lưới ECU dày đặc</h4>
+                <p style="font-size: 14px; color: #64748b;">Mỗi phân vùng (Body, Powertrain, Chassis, ADAS) đều được quản lý bởi các ECU chuyên biệt giao tiếp thời gian thực.</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 4</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide5">
+    <div class="slide-header">
+        <div class="slide-title">ECU (Electronic Control Unit) là gì?</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 15px;">
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 6px;">
+                <h3 style="color: var(--fpt-blue); font-size: 22px; margin-bottom: 15px;"><i class="fa-solid fa-hard-drive"></i> Phần cứng (Hardware)</h3>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.6;">
+                    <li style="margin-bottom: 8px;"><strong>MCU (Microcontroller):</strong> STM32, Aurix TC3xx, RH850...</li>
+                    <li style="margin-bottom: 8px;"><strong>Power Supply:</strong> Cung cấp nguồn ổn định (thường là 12V/24V hạ xuống 5V/3.3V).</li>
+                    <li style="margin-bottom: 8px;"><strong>Transceiver:</strong> Chuyển đổi tín hiệu logic sang tín hiệu đường truyền (ví dụ: TJA1050 cho CAN).</li>
+                    <li style="margin-bottom: 8px;"><strong>I/O Circuitry:</strong> Đọc cảm biến (ADC) và điều khiển cơ cấu chấp hành (PWM, Relays).</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 6px;">
+                <h3 style="color: var(--fpt-orange); font-size: 22px; margin-bottom: 15px;"><i class="fa-solid fa-code"></i> Phần mềm (Firmware)</h3>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.6;">
+                    <li style="margin-bottom: 8px;"><strong>Application Layer:</strong> Xử lý logic nghiệp vụ (ví dụ: Thuật toán chẩn đoán UDS).</li>
+                    <li style="margin-bottom: 8px;"><strong>Middleware / Services:</strong> ISO-TP, UDS stack, RTOS.</li>
+                    <li style="margin-bottom: 8px;"><strong>MCAL (Microcontroller Abstraction Layer):</strong> Điều khiển ngoại vi phần cứng (CAN Driver, GPIO Driver).</li>
+                    <li style="margin-bottom: 8px;"><strong>Bootloader:</strong> Cho phép cập nhật phần mềm từ xa (FOTA) qua mạng CAN/Ethernet.</li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 5</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide6">
+    <div class="slide-header">
+        <div class="slide-title">Tầm quan trọng của Hệ thống Chẩn đoán xe (Diagnostics)</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 18px; margin-bottom: 20px;">
+                Tại sao xe hơi cần hệ thống chẩn đoán? Khi xe chạy trên đường, bất kỳ lỗi phần cứng hay phần mềm nào xảy ra đều phải được ghi nhận ngay lập tức để bảo vệ an toàn cho người lái.
+            </p>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                <div style="border: 1px solid #e2e8f0; padding: 20px; border-radius: 6px;">
+                    <h4 style="color: var(--fpt-blue); margin-bottom: 10px;"><i class="fa-solid fa-triangle-exclamation"></i> Phát hiện & Lưu lỗi (DTC)</h4>
+                    <p style="font-size: 15px; color: var(--text-sub);">ECU liên tục giám sát các cảm biến. Nếu phát hiện ngắn mạch, hở mạch hoặc lỗi logic, nó sẽ lưu lại Diagnostic Trouble Code (DTC) vào bộ nhớ EEPROM/Flash.</p>
+                </div>
+                <div style="border: 1px solid #e2e8f0; padding: 20px; border-radius: 6px;">
+                    <h4 style="color: var(--fpt-orange); margin-bottom: 10px;"><i class="fa-solid fa-wrench"></i> Hỗ trợ sửa chữa bảo dưỡng</h4>
+                    <p style="font-size: 15px; color: var(--text-sub);">Kỹ thuật viên tại gara cắm thiết bị quét (OBD Dongle) vào cổng OBD-II của xe để đọc lỗi, xem thông số động cơ thời gian thực và xác định chính xác bộ phận bị hỏng.</p>
+                </div>
+                <div style="border: 1px solid #e2e8f0; padding: 20px; border-radius: 6px;">
+                    <h4 style="color: var(--fpt-green); margin-bottom: 10px;"><i class="fa-solid fa-arrow-rotate-right"></i> Flash & Reset ECU</h4>
+                    <p style="font-size: 15px; color: var(--text-sub);">Hệ thống chẩn đoán cho phép các kỹ sư phần mềm cập nhật firmware mới cho ECU, hiệu chỉnh (Calibrate) các tham số hoạt động mà không cần tháo rời phần cứng.</p>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 6</span>
+    </div>
+</div>
+
+<div class="slide-container section-divider" id="slide7">
+    <div class="num">02.</div>
+    <div class="name">Quy trình làm việc & Git Strategy</div>
+    <div class="line"></div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 7</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide8">
+    <div class="slide-header">
+        <div class="slide-title">Cách thức làm việc trong dự án Automotive</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <p style="font-size: 18px; line-height: 1.6; margin-bottom: 20px;">
+                    Dự án Automotive đòi hỏi độ tin cậy cực kỳ cao. Vì vậy, quy trình phát triển tuân thủ nghiêm ngặt mô hình <strong>V-Model</strong> và tiêu chuẩn chất lượng <strong>ASPICE</strong>.
+                </p>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;"><strong>Requirements:</strong> Mọi tính năng phải bắt nguồn từ Requirement rõ ràng, không code tùy tiện.</li>
+                    <li style="margin-bottom: 10px;"><strong>Traceability:</strong> Code phải tương ứng với thiết kế, và thiết kế phải tương ứng với Requirement.</li>
+                    <li style="margin-bottom: 10px;"><strong>Automated Testing:</strong> Mọi dòng code viết ra phải được bao phủ bởi Unit Test và Integration Test.</li>
+                </ul>
+            </div>
+            <div style="background: #f8fafc; padding: 25px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <h4 style="color: var(--fpt-orange); margin-bottom: 15px;"><i class="fa-solid fa-check-double"></i> Mindset của Kỹ sư Nhúng</h4>
+                <p style="font-size: 15px; color: var(--text-sub); line-height: 1.6;">
+                    "An toàn là trên hết. Không có khái niệm code chạy tạm, code lỗi làm chết máy xe. Code phải tường minh, tuân thủ tiêu chuẩn an toàn (MISRA C) và được kiểm thử kỹ lưỡng."
+                </p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 8</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide9">
+    <div class="slide-header">
+        <div class="slide-title">Quản lý Task & Tiến độ dự án</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 18px; margin-bottom: 20px;">Chúng ta sẽ áp dụng mô hình <strong>Scrum / Agile</strong> tinh gọn để quản lý dự án thực tập này:</p>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;">
+                <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px;">
+                    <h4 style="color: var(--fpt-blue); margin-bottom: 10px;"><i class="fa-solid fa-list-check"></i> 1. Quản lý trên Board</h4>
+                    <p style="font-size: 15px; color: var(--text-sub);">Tất cả các tính năng (UDS SID, ISO-TP layer...) được chia thành các Task nhỏ trên Jira/Trello Board với các cột: To Do -> In Progress -> Code Review -> Testing -> Done.</p>
+                </div>
+                <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px;">
+                    <h4 style="color: var(--fpt-orange); margin-bottom: 10px;"><i class="fa-solid fa-calendar-days"></i> 2. Định kỳ Sprint</h4>
+                    <p style="font-size: 15px; color: var(--text-sub);">Mỗi Sprint kéo dài 1-2 tuần. Đầu Sprint họp lập kế hoạch, cuối Sprint bàn giao tính năng có thể chạy được (Runnable Firmware).</p>
+                </div>
+                <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px;">
+                    <h4 style="color: var(--fpt-green); margin-bottom: 10px;"><i class="fa-solid fa-circle-check"></i> 3. Definition of Done (DoD)</h4>
+                    <p style="font-size: 15px; color: var(--text-sub);">Task chỉ được coi là "Done" khi: Code biên dịch không lỗi/cảnh báo, tuân thủ MISRA C, đã vượt qua Unit Test và được Mentor Approve Pull Request.</p>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 9</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide10">
+    <div class="slide-header">
+        <div class="slide-title">Cấu trúc Thư mục Dự án nhúng chuẩn (File Management)</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 15px;">
+                    Để dự án có thể mở rộng và nhiều người cùng làm việc mà không bị xung đột, cấu trúc thư mục source code phải được module hóa rõ ràng:
+                </p>
+                <div style="background: #1e293b; color: #f8fafc; font-family: monospace; padding: 20px; border-radius: 6px; font-size: 14px; line-height: 1.4;">
+                    /project_root<br>
+                    ├── /Core (Mã nguồn chính từ CubeMX)<br>
+                    ├── /Drivers (Thư viện STM32 HAL & CMSIS)<br>
+                    ├── /ECU_Services (Nơi lưu code UDS, ISO-TP)<br>
+                    │   ├── /ISO_TP (Tầng truyền tải)<br>
+                    │   └── /UDS (Tầng ứng dụng chẩn đoán)<br>
+                    └── /App (Logic điều khiển nghiệp vụ)
+                </div>
+            </div>
+            <div>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 15px;">Quy tắc quản lý file cốt lõi:</h4>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;"><strong>Tách biệt Layer:</strong> File driver không được gọi trực tiếp hàm của tầng ứng dụng.</li>
+                    <li style="margin-bottom: 10px;"><strong>Tên file rõ ràng:</strong> Đặt tên file theo module, ví dụ: <code>uds_service_0x22.c</code>, <code>iso_tp_core.c</code>.</li>
+                    <li style="margin-bottom: 10px;"><strong>File Header tự lập:</strong> Mỗi file <code>.h</code> phải có header guard (<code>#ifndef ... #define</code>) để tránh include lặp.</li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 10</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide11">
+    <div class="slide-header">
+        <div class="slide-title">Tại sao dự án nhúng cần Git?</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <p style="font-size: 18px; line-height: 1.6; margin-bottom: 15px;">
+                    Nhiều sinh viên quen với việc nén file zip code gửi qua Zalo/Drive. Cách làm này <strong>phá hủy hoàn toàn</strong> tính chuyên nghiệp của một kỹ sư.
+                </p>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;"><i class="fa-solid fa-code-fork" style="color: var(--fpt-orange); margin-right: 10px;"></i> <strong>Đồng bộ mã nguồn:</strong> Nhiều người cùng code một dự án, tự động ghép (merge) code không lo bị đè đè đè.</li>
+                    <li style="margin-bottom: 10px;"><i class="fa-solid fa-clock-rotate-left" style="color: var(--fpt-blue); margin-right: 10px;"></i> <strong>Quản lý lịch sử:</strong> Biết ai sửa dòng code nào, sửa lúc nào, vì sao sửa.</li>
+                    <li style="margin-bottom: 10px;"><i class="fa-solid fa-rotate-left" style="color: var(--fpt-green); margin-right: 10px;"></i> <strong>Khôi phục an toàn:</strong> Dễ dàng quay lại phiên bản cũ hoạt động ổn định nếu code mới bị lỗi.</li>
+                </ul>
+            </div>
+            <div style="background: #f8fafc; padding: 25px; border-radius: 8px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                <i class="fa-brands fa-git-alt" style="font-size: 80px; color: #f05032; margin-bottom: 15px;"></i>
+                <h4 style="color: var(--text-main);">Tiêu chuẩn bắt buộc</h4>
+                <p style="font-size: 14px; color: var(--text-sub);">100% các công ty Automotive Embedded (FPT, Bosch, VinFast) đều sử dụng Git làm công cụ quản lý mã nguồn mặc định.</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 11</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide12">
+    <div class="slide-header">
+        <div class="slide-title">Chiến lược Gitflow của chúng ta</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 18px; margin-bottom: 15px;">Chúng ta sử dụng nhánh mô phỏng môi trường dự án thực tế:</p>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;">
+                <div style="background: #fee2e2; padding: 20px; border-radius: 6px; border-top: 4px solid #ef4444;">
+                    <h4 style="color: #b91c1c; margin-bottom: 10px;">main / master</h4>
+                    <p style="font-size: 14px; color: #7f1d1d;">Nhánh sản phẩm cực kỳ an toàn. Chỉ chứa code đã được kiểm thử 100% ổn định trên xe thật. Không ai được commit trực tiếp vào đây.</p>
+                </div>
+                <div style="background: #eff6ff; padding: 20px; border-radius: 6px; border-top: 4px solid #3b82f6;">
+                    <h4 style="color: #1d4ed8; margin-bottom: 10px;">develop</h4>
+                    <p style="font-size: 14px; color: #1e3a8a;">Nhánh tích hợp. Tất cả các tính năng mới sau khi hoàn thành sẽ được merge vào đây để test tích hợp hệ thống.</p>
+                </div>
+                <div style="background: #fef3c7; padding: 20px; border-radius: 6px; border-top: 4px solid #f59e0b;">
+                    <h4 style="color: #b45309; margin-bottom: 10px;">feature/*</h4>
+                    <p style="font-size: 14px; color: #78350f;">Nhánh phát triển tính năng mới. Tách ra từ <code>develop</code>. Ví dụ: <code>feature/ecu-uds-sid22</code>.</p>
+                </div>
+                <div style="background: #ecfdf5; padding: 20px; border-radius: 6px; border-top: 4px solid #10b981;">
+                    <h4 style="color: #047857; margin-bottom: 10px;">bugfix/*</h4>
+                    <p style="font-size: 14px; color: #064e3b;">Nhánh sửa lỗi. Dùng khi phát hiện bug trong quá trình kiểm thử tích hợp trên nhánh <code>develop</code>.</p>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 12</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide13">
+    <div class="slide-header">
+        <div class="slide-title">Quy tắc đặt tên Branch & Luồng làm việc Git</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 15px;">Quy tắc đặt tên nhánh (Branch Naming):</h4>
+                <div style="background: var(--fpt-grey-light); padding: 15px; border-radius: 6px; font-family: monospace; font-size: 16px; margin-bottom: 20px;">
+                    <span style="color: #2563eb;">feature/</span>[tên-thành-viên]-[tên-tính-năng]<br>
+                    <span style="color: #dc2626;">bugfix/</span>[tên-thành-viên]-[lỗi-sửa-đổi]
+                </div>
+                <p style="font-size: 16px; line-height: 1.6;">Ví dụ chuẩn:</p>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li><code>feature/hieu-uds-sid22-implementation</code></li>
+                    <li><code>bugfix/hieu-can-rx-fifo-overflow</code></li>
+                </ul>
+            </div>
+            <div>
+                <h4 style="color: var(--fpt-orange); margin-bottom: 15px;">Các lệnh Git cơ bản cần nằm lòng:</h4>
+                <div style="background: #1e293b; color: #f8fafc; font-family: monospace; padding: 20px; border-radius: 6px; font-size: 14px; line-height: 1.5;">
+                    # Tạo nhánh mới từ develop<br>
+                    git checkout develop<br>
+                    git pull origin develop<br>
+                    git checkout -b feature/hieu-init<br><br>
+                    # Lưu trữ thay đổi<br>
+                    git add .<br>
+                    git commit -m "feat(init): configure led blink"<br><br>
+                    # Đưa code lên remote<br>
+                    git push origin feature/hieu-init
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 13</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide14">
+    <div class="slide-header">
+        <div class="slide-title">Quy chuẩn thông điệp Commit (Conventional Commits)</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 18px; margin-bottom: 15px;">Không viết commit vô nghĩa như "fix bug", "up code", "abc". Hãy dùng chuẩn quốc tế:</p>
+            <div style="background: #1e293b; color: #f8fafc; font-family: monospace; padding: 25px; border-radius: 6px; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+                <span style="color: var(--fpt-orange); font-weight: bold;">&lt;type&gt;(&lt;scope&gt;): &lt;subject&gt;</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 16px;">
+                <div>
+                    <ul style="list-style: none;">
+                        <li style="margin-bottom: 8px;"><strong>feat:</strong> Phát triển tính năng mới (ví dụ: <code>feat(can): add filters</code>)</li>
+                        <li style="margin-bottom: 8px;"><strong>fix:</strong> Sửa lỗi trong code (ví dụ: <code>fix(uds): correct positive response SID</code>)</li>
+                        <li style="margin-bottom: 8px;"><strong>docs:</strong> Cập nhật tài liệu, comment (ví dụ: <code>docs(readme): update build guide</code>)</li>
+                    </ul>
+                </div>
+                <div>
+                    <ul style="list-style: none;">
+                        <li style="margin-bottom: 8px;"><strong>refactor:</strong> Tối ưu cấu trúc code, không đổi logic (ví dụ: <code>refactor(uds): optimize state machine</code>)</li>
+                        <li style="margin-bottom: 8px;"><strong>style:</strong> Sửa format code, căn lề, khoảng trắng (ví dụ: <code>style(can): format code</code>)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 14</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide15">
+    <div class="slide-header">
+        <div class="slide-title">Quy trình Tạo Pull Request (PR) & Code Review</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 15px;">Mục tiêu của Code Review:</h4>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;">Đảm bảo không ai tự ý đẩy code lỗi trực tiếp lên nhánh chung.</li>
+                    <li style="margin-bottom: 10px;">Các thành viên trong nhóm học hỏi kỹ thuật viết code của nhau.</li>
+                    <li style="margin-bottom: 10px;">Phát hiện sớm các lỗi về rò rỉ bộ nhớ, sai kiểu dữ liệu, sai thuật toán trước khi nạp vào mạch thật.</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 6px; border-left: 6px solid var(--fpt-orange);">
+                <h4 style="color: var(--fpt-orange); margin-bottom: 10px;"><i class="fa-solid fa-user-shield"></i> Tiêu chuẩn MISRA C</h4>
+                <p style="font-size: 15px; color: var(--text-sub); line-height: 1.6;">
+                    Khi review code cho dự án nhúng automotive, chúng ta sẽ bắt đầu làm quen với các tập con của quy chuẩn <strong>MISRA C</strong> (ví dụ: không sử dụng con trỏ hoang, luôn khai báo kích thước dữ liệu tường minh như <code>uint8_t</code> thay vì <code>char</code>/<code>int</code>...).
+                </p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 15</span>
+    </div>
+</div>
+
+<div class="slide-container section-divider" id="slide16">
+    <div class="num">03.</div>
+    <div class="name">Thiết lập Môi trường & STM32 Bring-up</div>
+    <div class="line"></div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 16</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide17">
+    <div class="slide-header">
+        <div class="slide-title">Hệ sinh thái STM32 cho Automotive</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <p style="font-size: 18px; line-height: 1.6; margin-bottom: 20px;">
+                    Dự án sử dụng vi điều khiển <strong>STM32</strong> làm Diagnostic ECU Server kết nối trực tiếp với Transceiver CAN thật.
+                </p>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;"><strong>STM32CubeMX:</strong> Công cụ cấu hình trực quan Clock, Chân vi điều khiển, sinh mã nguồn khởi tạo tự động.</li>
+                    <li style="margin-bottom: 10px;"><strong>STM32CubeIDE:</strong> IDE tích hợp đầy đủ trình biên dịch (compiler) và trình gỡ lỗi (GDB debugger).</li>
+                </ul>
+            </div>
+            <div style="background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                <i class="fa-solid fa-microchip" style="font-size: 80px; color: var(--fpt-blue); margin-bottom: 15px;"></i>
+                <h4 style="color: var(--fpt-orange);">STM32 Nucleo Board</h4>
+                <p style="font-size: 14px; color: var(--text-sub);">Tích hợp sẵn bộ nạp ST-Link giúp lập trình và debug biến trực tiếp qua cổng USB tiện lợi.</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 17</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide18">
+    <div class="slide-header">
+        <div class="slide-title">Cấu hình Clock & GPIO trong STM32CubeMX</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 15px;">Quy trình cấu hình vi điều khiển chuẩn xác:</h4>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 8px;"><strong>Cấu hình bộ dao động (RCC):</strong> Chọn Crystal/Ceramic Resonator (HSE) ngoài để đảm bảo tần số Clock của bộ điều khiển CAN đạt độ chính xác cao nhất (không dùng bộ dao động RC nội của chip vì dễ bị trôi tần số theo nhiệt độ).</li>
+                    <li style="margin-bottom: 8px;"><strong>Cấu hình Clock Tree:</strong> Thiết lập tần số SYSCLK mong muốn (ví dụ: 72MHz hoặc 168MHz).</li>
+                    <li style="margin-bottom: 8px;"><strong>Cấu hình GPIO điều khiển LED:</strong> Thiết lập chân GPIO Output để điều khiển LED báo trạng thái của ECU.</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 6px;">
+                <h4 style="color: var(--fpt-orange); margin-bottom: 10px;"><i class="fa-solid fa-triangle-exclamation"></i> Chú ý cực kỳ quan trọng:</h4>
+                <p style="font-size: 14px; color: var(--text-sub); line-height: 1.6;">
+                    Khi sinh code từ STM32CubeMX, toàn bộ code tự viết của bạn <strong>phải nằm trong</strong> các vùng được đánh dấu sẵn: <br>
+                    <code>/* USER CODE BEGIN ... */</code> và <br>
+                    <code>/* USER CODE END ... */</code>. <br>
+                    Nếu viết ngoài vùng này, code sẽ bị xóa sạch khi bạn cấu hình lại CubeMX và nhấn Generate Code!
+                </p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 18</span>
+    </div>
+</div>
+
+<div class="slide-container section-divider" id="slide19">
+    <div class="num">04.</div>
+    <div class="name">Live Thực hành tại lớp (Class Demo)</div>
+    <div class="line"></div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 19</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide20">
+    <div class="slide-header">
+        <div class="slide-title">Mục tiêu & Chuẩn bị Thiết bị Demo</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 15px;"><i class="fa-solid fa-list"></i> Mục tiêu bài thực hành tại lớp:</h4>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;">Làm quen hoàn toàn với luồng làm việc thực tế từ nhận task, viết code đến tích hợp.</li>
+                    <li style="margin-bottom: 10px;">Kiểm tra xem máy tính đã cài đặt đúng toolchain và nạp thành công chương trình xuống mạch thật hay chưa.</li>
+                    <li style="margin-bottom: 10px;">Kiểm tra quy trình tạo PR và rà soát code.</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 6px;">
+                <h4 style="color: var(--fpt-orange); margin-bottom: 15px;"><i class="fa-solid fa-screwdriver-wrench"></i> Thiết bị cần có sẵn trên bàn:</h4>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li>1x Kit phát triển STM32 Nucleo.</li>
+                    <li>1x Cáp truyền dữ liệu USB kết nối với máy tính.</li>
+                    <li>Máy tính đã cài sẵn STM32CubeIDE & Git.</li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 20</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide21">
+    <div class="slide-header">
+        <div class="slide-title">Bước 1: Clone Project mẫu & Tạo nhánh Git</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 18px; margin-bottom: 15px;">Mở Terminal (hoặc Git Bash) trên máy tính và gõ các lệnh sau để lấy project mẫu về:</p>
+            <div style="background: #1e293b; color: #f8fafc; font-family: monospace; padding: 25px; border-radius: 6px; font-size: 15px; line-height: 1.6; margin-bottom: 20px;">
+                # 1. Clone repository dự án từ GitHub<br>
+                git clone https://github.com/hieu/automotive-ecu-uds.git<br><br>
+                # 2. Truy cập vào thư mục dự án<br>
+                cd automotive-ecu-uds<br><br>
+                # 3. Tạo một nhánh phát triển cá nhân từ nhánh develop<br>
+                git checkout develop<br>
+                git checkout -b feature/hieu-setup-led
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 21</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide22">
+    <div class="slide-header">
+        <div class="slide-title">Bước 2: Import Project vào STM32CubeIDE</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 15px;">Thao tác trên phần mềm STM32CubeIDE:</h4>
+                <ol style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;">Mở STM32CubeIDE, chọn workspace bất kỳ.</li>
+                    <li style="margin-bottom: 10px;">Chọn <strong>File -> Import...</strong> từ menu trên cùng.</li>
+                    <li style="margin-bottom: 10px;">Chọn <strong>General -> Existing Projects into Workspace</strong>, bấm Next.</li>
+                    <li style="margin-bottom: 10px;">Tại ô <i>Select root directory</i>, nhấn Browse và trỏ đến thư mục vừa clone về.</li>
+                    <li style="margin-bottom: 10px;">Nhấn <strong>Finish</strong> để đưa dự án vào môi trường làm việc.</li>
+                </ol>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                <i class="fa-solid fa-folder-open" style="font-size: 70px; color: var(--fpt-orange); margin-bottom: 15px;"></i>
+                <p style="font-size: 14px; color: var(--text-sub);">Đảm bảo thư mục được import chứa sẵn file cấu hình <code>.ioc</code> của CubeMX.</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 22</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide23">
+    <div class="slide-header">
+        <div class="slide-title">Bước 3: Viết mã nguồn điều khiển LED (HAL)</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 18px; margin-bottom: 15px;">Mở file <code>Core/Src/main.c</code>, tìm đến vòng lặp <code>while(1)</code> và viết code nhấp nháy LED:</p>
+            <div style="background: #1e293b; color: #f8fafc; font-family: monospace; padding: 25px; border-radius: 6px; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">
+                /* USER CODE BEGIN WHILE */<br>
+                while (1)<br>
+                {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;/* Tải trạng thái chân GPIO điều khiển LED */<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);<br><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;/* Tạo độ trễ 500ms */<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;HAL_Delay(500);<br><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;/* USER CODE END WHILE */<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;/* USER CODE BEGIN 3 */<br>
+                }<br>
+                /* USER CODE END 3 */
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 23</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide24">
+    <div class="slide-header">
+        <div class="slide-title">Bước 4: Biên dịch & Nạp chương trình</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <h3 style="color: var(--fpt-blue); font-size: 20px; margin-bottom: 15px;"><i class="fa-solid fa-hammer"></i> 1. Biên dịch (Build Code)</h3>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 10px;">
+                    Nhấn vào biểu tượng chiếc búa (Build) trên thanh công cụ hoặc bấm tổ hợp phím <code>Ctrl + B</code>.
+                </p>
+                <p style="font-size: 14px; color: var(--text-sub);">
+                    Kiểm tra bảng Console ở phía dưới. Đảm bảo kết quả hiển thị <strong>0 errors, 0 warnings</strong> để tiếp tục nạp.
+                </p>
+            </div>
+            <div>
+                <h3 style="color: var(--fpt-orange); font-size: 20px; margin-bottom: 15px;"><i class="fa-solid fa-circle-play"></i> 2. Nạp code (Flash/Run)</h3>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 10px;">
+                    Kết nối kit STM32 với máy tính qua cáp USB. Nhấn nút Run (biểu tượng hình tròn màu xanh lá có tam giác trắng).
+                </p>
+                <p style="font-size: 14px; color: var(--text-sub);">
+                    Nếu xuất hiện bảng cấu hình nạp, nhấn OK để sử dụng cấu hình mặc định qua ST-Link. Đèn LED trên mạch sẽ bắt đầu nhấp nháy chu kỳ 1 giây.
+                </p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 24</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide25">
+    <div class="slide-header">
+        <div class="slide-title">Bước 5: Commit & Tạo Pull Request đầu tiên</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 17px; margin-bottom: 15px;">Sau khi LED hoạt động đúng, tiến hành lưu lại code, đẩy lên Github và tạo yêu cầu review:</p>
+            <div style="background: #1e293b; color: #f8fafc; font-family: monospace; padding: 20px; border-radius: 6px; font-size: 13px; line-height: 1.5; margin-bottom: 15px;">
+                # Kiểm tra trạng thái file sửa đổi<br>
+                git status<br><br>
+                # Lưu file vào Staging Area và commit theo chuẩn quốc tế<br>
+                git add Core/Src/main.c<br>
+                git commit -m "feat(led): implement toggle LED every 500ms"<br><br>
+                # Đẩy nhánh lên github cá nhân<br>
+                git push origin feature/hieu-setup-led
+            </div>
+            <p style="font-size: 15px; color: var(--text-sub);">
+                <strong>Hành động cuối:</strong> Truy cập vào trang Github của dự án nhúng, bạn sẽ thấy nút gợi ý "Compare & pull request". Nhấn vào đó, viết mô tả ngắn gọn và gán Mentor làm Reviewer để duyệt code.
+            </p>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 25</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide26">
+    <div class="slide-header">
+        <div class="slide-title">Tổng kết Buổi 1 & Bài tập chuẩn bị cho Buổi 2</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 15px;">Kết quả đạt được sau Buổi 1:</h4>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li>Mọi sinh viên đều cài đặt thành công phần mềm và nạp code chạy được trên kit STM32 thật.</li>
+                    <li>Nắm vững luồng làm việc phân chia nhánh trên Git, cách commit chuẩn mực.</li>
+                    <li>Hiểu sâu về cấu trúc một dự án phần mềm Automotive.</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 6px; border-left: 6px solid var(--fpt-orange);">
+                <h4 style="color: var(--fpt-orange); margin-bottom: 10px;"><i class="fa-solid fa-book-open"></i> Bài tập tự nghiên cứu (Bắt buộc):</h4>
+                <p style="font-size: 15px; color: var(--text-sub); line-height: 1.6;">
+                    Để chuẩn bị tốt cho buổi học kỹ thuật chuyên sâu tiếp theo, yêu cầu tất cả sinh viên đọc trước tài liệu về: <br>
+                    1. Giao thức truyền thông <strong>CAN Bus</strong> (Cách các bit dữ liệu truyền trên dây). <br>
+                    2. Giao thức chẩn đoán <strong>UDS (ISO 14229)</strong>.
+                </p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 26</span>
+    </div>
+</div>
+
+<div class="slide-container title-slide" id="slide27">
+    <img src="https://fpt.auto/Content/images/logo.png" class="logo" alt="FPT Logo">
+    <h1>BOOTCAMP 02:<br><span>CAN BUS & UDS DIAGNOSTIC PROTOCOLS</span></h1>
+    <div class="info-box">
+        <p style="font-size: 26px; font-weight: 700; color: #0f172a;">Kỹ thuật lập trình truyền thông mạng xe hơi & Tiêu chuẩn chẩn đoán</p>
+        <p style="font-size: 18px; color: #475569; margin-top: 10px;">Hanoi, 2026 | Phase 2 - Thực tập hè 2026</p>
+    </div>
+    <div class="year-bg">2026</div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span class="footer-brand">fpt.auto</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide28">
+    <div class="slide-header">
+        <div class="slide-title">Agenda Buổi 2: CAN Bus & UDS</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-left: 6px solid var(--fpt-orange); border-radius: 4px;">
+                <h4 style="color: var(--fpt-blue); font-size: 20px; margin-bottom: 10px;">01. Giao thức CAN Bus</h4>
+                <p style="font-size: 16px; margin: 0;">Đặc tính vật lý, Transceiver, cấu trúc gói tin Frame CAN và cơ chế phân xử đường truyền.</p>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-left: 6px solid var(--fpt-blue); border-radius: 4px;">
+                <h4 style="color: var(--fpt-blue); font-size: 20px; margin-bottom: 10px;">02. Lập trình CAN trên STM32</h4>
+                <p style="font-size: 16px; margin: 0;">Cách cấu hình bộ lọc CAN, Baudrate chính xác và nhận dữ liệu bằng ngắt (Interrupt).</p>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-left: 6px solid var(--fpt-orange); border-radius: 4px;">
+                <h4 style="color: var(--fpt-blue); font-size: 20px; margin-bottom: 10px;">03. Tầng vận tải ISO-TP (ISO 15765-2)</h4>
+                <p style="font-size: 16px; margin: 0;">Cơ chế phân mảnh và ghép gói tin chẩn đoán lớn hơn 8 bytes trên đường truyền CAN Bus.</p>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-left: 6px solid var(--fpt-blue); border-radius: 4px;">
+                <h4 style="color: var(--fpt-blue); font-size: 20px; margin-bottom: 10px;">04. Tiêu chuẩn chẩn đoán UDS (ISO 14229)</h4>
+                <p style="font-size: 16px; margin: 0;">Định dạng bản tin chẩn đoán và cách lập trình các dịch vụ cốt lõi (0x10, 0x22, 0x27, 0x11).</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 28</span>
+    </div>
+</div>
+
+<div class="slide-container section-divider" id="slide29">
+    <div class="num">05.</div>
+    <div class="name">Giao thức truyền thông CAN Bus</div>
+    <div class="line"></div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 29</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide30">
+    <div class="slide-header">
+        <div class="slide-title">Toolchain & STM32 Bring-up</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 40px; margin-top: 20px;">
+            <div style="height: 380px;">
+                <!-- Clean Inline SVG replacing STM32 UI diagram -->
+                <svg viewBox="0 0 500 300" style="width:100%; height:100%; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-family:'Inter',sans-serif;">
+                    <rect x="50" y="50" width="160" height="200" rx="8" fill="#e2e8f0" stroke="#94a3b8" stroke-width="3"/>
+                    <rect x="90" y="110" width="80" height="80" rx="4" fill="#334155"/>
+                    <text x="130" y="155" fill="white" font-weight="bold" font-size="11" text-anchor="middle">STM32 MCU</text>
+                    <text x="130" y="80" fill="#034ea2" font-weight="bold" font-size="13" text-anchor="middle">NUCLEO Board</text>
+                    
+                    <rect x="290" y="110" width="120" height="80" rx="6" fill="#f1f5f9" stroke="#f37021" stroke-width="3"/>
+                    <text x="350" y="145" fill="#0f172a" font-weight="bold" font-size="12" text-anchor="middle">TJA1050</text>
+                    <text x="350" y="165" fill="#f37021" font-size="10" font-weight="bold" text-anchor="middle">Transceiver</text>
+                    
+                    <path d="M 170 130 L 290 130" stroke="#3b82f6" stroke-width="2"/>
+                    <text x="230" y="122" fill="#3b82f6" font-size="9" font-weight="bold" text-anchor="middle">TXD (GPIO)</text>
+                    <path d="M 170 170 L 290 170" stroke="#10b981" stroke-width="2"/>
+                    <text x="230" y="162" fill="#10b981" font-size="9" font-weight="bold" text-anchor="middle">RXD (GPIO)</text>
+                    
+                    <path d="M 410 130 L 480 130" stroke="#f37021" stroke-width="3"/>
+                    <text x="445" y="120" fill="#f37021" font-size="10" font-weight="bold" text-anchor="middle">CAN_H</text>
+                    <path d="M 410 170 L 480 170" stroke="#034ea2" stroke-width="3"/>
+                    <text x="445" y="190" fill="#034ea2" font-size="10" font-weight="bold" text-anchor="middle">CAN_L</text>
+                </svg>
+            </div>
+            <div>
+                <h3>STM32 & CAN Transceiver</h3>
+                <p style="font-size: 16px; line-height: 1.6; margin-top: 15px;">Môi trường phát triển và ghép nối phần cứng cốt lõi:</p>
+                <ul style="padding-left: 20px; margin-top: 15px; line-height: 1.8; font-size: 16px;">
+                    <li><strong>Cấu hình Clock:</strong> Đảm bảo tần số CAN ổn định, chống trôi lệch Baudrate do nhiệt độ.</li>
+                    <li><strong>Pinout Mapping:</strong> Gán chân TX/RX chính xác cho bộ điều khiển CAN ngoại vi.</li>
+                    <li><strong>Transceiver (TJA1050):</strong> Đóng vai trò cầu nối chuyển đổi mức điện áp logic sang tín hiệu vi sai vật lý.</li>
+                </ul>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 30</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide31">
+    <div class="slide-header">
+        <div class="slide-title">Đặc tính vật lý vi sai của CAN Bus</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1.1fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 15px;">
+                    CAN Bus sử dụng hai đường dây xoắn đôi <strong>CAN_High</strong> và <strong>CAN_Low</strong> để truyền tải tín hiệu vi sai.
+                </p>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;"><strong>Trạng thái Tĩnh (Recessive - logic 1):</strong> CAN_H = 2.5V, CAN_L = 2.5V. Hiệu điện thế vi sai Vdiff = 0V.</li>
+                    <li style="margin-bottom: 10px;"><strong>Trạng thái Động (Dominant - logic 0):</strong> CAN_H = 3.5V, CAN_L = 1.5V. Hiệu điện thế vi sai Vdiff = 2V.</li>
+                    <li style="margin-bottom: 10px;"><strong>Điện trở đầu cuối 120 Ohm:</strong> Phải được đấu ở 2 đầu xa nhất của mạng Bus để triệt tiêu sóng phản xạ tín hiệu.</li>
+                </ul>
+            </div>
+            <div style="height: 380px;">
+                <!-- Vector SVG replacement for broken CAN Waveform Image -->
+                <svg viewBox="0 0 500 300" style="width: 100%; height: 100%; background: #0f172a; border-radius: 8px; font-family: monospace;">
+                    <line x1="40" y1="50" x2="460" y2="50" stroke="#1e293b" stroke-dasharray="3,3"/>
+                    <text x="12" y="55" fill="#64748b" font-size="11">4.0V</text>
+                    <line x1="40" y1="100" x2="460" y2="100" stroke="#334155" stroke-dasharray="3,3"/>
+                    <text x="12" y="105" fill="#64748b" font-size="11">3.5V</text>
+                    <line x1="40" y1="150" x2="460" y2="150" stroke="#334155" stroke-dasharray="3,3"/>
+                    <text x="12" y="155" fill="#64748b" font-size="11">2.5V</text>
+                    <line x1="40" y1="200" x2="460" y2="200" stroke="#334155" stroke-dasharray="3,3"/>
+                    <text x="12" y="205" fill="#64748b" font-size="11">1.5V</text>
+                    <line x1="40" y1="250" x2="460" y2="250" stroke="#1e293b" stroke-dasharray="3,3"/>
+                    <text x="12" y="255" fill="#64748b" font-size="11">1.0V</text>
+                    
+                    <!-- Waveforms -->
+                    <!-- CAN_H (Orange) -->
+                    <path d="M 40 150 L 140 150 L 140 100 L 240 100 L 240 150 L 340 150 L 340 100 L 440 100" fill="none" stroke="#f37021" stroke-width="4"/>
+                    <text x="360" y="85" fill="#f37021" font-size="11" font-weight="bold">CAN_H</text>
+                    
+                    <!-- CAN_L (Blue) -->
+                    <path d="M 40 150 L 140 150 L 140 200 L 240 200 L 240 150 L 340 150 L 340 200 L 440 200" fill="none" stroke="#3b82f6" stroke-width="4"/>
+                    <text x="360" y="225" fill="#3b82f6" font-size="11" font-weight="bold">CAN_L</text>
+                    
+                    <!-- X-axis labels (Logic state) -->
+                    <rect x="40" y="265" width="100" height="20" fill="#1e293b" rx="3"/>
+                    <text x="90" y="279" fill="#94a3b8" font-size="9" font-weight="bold" text-anchor="middle">Recessive (1)</text>
+                    
+                    <rect x="140" y="265" width="100" height="20" fill="#0284c7" rx="3"/>
+                    <text x="190" y="279" fill="white" font-size="9" font-weight="bold" text-anchor="middle">Dominant (0)</text>
+                    
+                    <rect x="240" y="265" width="100" height="20" fill="#1e293b" rx="3"/>
+                    <text x="290" y="279" fill="#94a3b8" font-size="9" font-weight="bold" text-anchor="middle">Recessive (1)</text>
+                    
+                    <rect x="340" y="265" width="100" height="20" fill="#0284c7" rx="3"/>
+                    <text x="390" y="279" fill="white" font-size="9" font-weight="bold" text-anchor="middle">Dominant (0)</text>
+                </svg>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 31</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide32">
+    <div class="slide-header">
+        <div class="slide-title">Kiến trúc Firmware Stack & Phân mảnh ISO-TP</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 15px;">Khái niệm ISO-TP Segmentation:</h4>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 15px;">
+                    Khi tầng ứng dụng UDS yêu cầu truyền dữ liệu lớn hơn kích thước tối đa 8 Bytes của một Frame CAN truyền thống (ví dụ: chuỗi mã VIN 17 Bytes).
+                </p>
+                <p style="font-size: 16px; line-height: 1.6;">
+                    Giao thức <strong>ISO-TP</strong> sẽ tự động đứng ra chia nhỏ dữ liệu thành các gói liên tiếp và kiểm soát luồng gửi an toàn giữa Client và Server.
+                </p>
+            </div>
+            <div style="height: 380px;">
+                <!-- Vector SVG replacement for missing slide 32 diagram -->
+                <svg viewBox="0 0 500 300" style="width:100%; height:100%; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-family:'Inter',sans-serif;">
+                    <rect x="40" y="25" width="180" height="35" rx="4" fill="#034ea2"/>
+                    <text x="130" y="47" fill="white" font-weight="bold" font-size="11" text-anchor="middle">UDS Application (30B)</text>
+                    
+                    <path d="M 130 60 L 130 90" stroke="#cbd5e1" stroke-width="2" marker-end="url(#arrow)"/>
+                    
+                    <rect x="20" y="100" width="220" height="60" rx="4" fill="none" stroke="#f37021" stroke-width="2" stroke-dasharray="4,4"/>
+                    <text x="130" y="120" fill="#f37021" font-weight="bold" font-size="11" text-anchor="middle">ISO-TP Layer (Segmentation)</text>
+                    <rect x="30" y="135" width="40" height="18" fill="#fed7aa"/>
+                    <text x="50" y="148" fill="#ea580c" font-size="9" font-weight="bold" text-anchor="middle">FF</text>
+                    <rect x="80" y="135" width="40" height="18" fill="#fed7aa"/>
+                    <text x="100" y="148" fill="#ea580c" font-size="9" font-weight="bold" text-anchor="middle">CF1</text>
+                    <rect x="130" y="135" width="40" height="18" fill="#fed7aa"/>
+                    <text x="150" y="148" fill="#ea580c" font-size="9" font-weight="bold" text-anchor="middle">CF2</text>
+                    <rect x="180" y="135" width="50" height="18" fill="#fed7aa"/>
+                    <text x="205" y="148" fill="#ea580c" font-size="9" font-weight="bold" text-anchor="middle">CF3</text>
+                    
+                    <rect x="290" y="100" width="180" height="110" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2"/>
+                    <text x="380" y="122" fill="#334155" font-weight="bold" font-size="11" text-anchor="middle">CAN Tx Mailboxes (8B)</text>
+                    <rect x="310" y="135" width="140" height="18" fill="#cbd5e1"/>
+                    <text x="380" y="147" fill="#334155" font-size="9" text-anchor="middle">Frame 1: First Frame</text>
+                    <rect x="310" y="158" width="140" height="18" fill="#cbd5e1"/>
+                    <text x="380" y="170" fill="#334155" font-size="9" text-anchor="middle">Frame 2: Consecutive 1</text>
+                    <rect x="310" y="181" width="140" height="18" fill="#cbd5e1"/>
+                    <text x="380" y="193" fill="#334155" font-size="9" text-anchor="middle">Frame 3: Consecutive 2</text>
+                    
+                    <path d="M 240 130 L 290 130" stroke="#cbd5e1" stroke-width="2"/>
+                </svg>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 32</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide33">
+    <div class="slide-header">
+        <div class="slide-title">CAN Transceiver & Vai trò chuyển đổi tín hiệu</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <p style="font-size: 18px; line-height: 1.6; margin-bottom: 15px;">
+                    Vi điều khiển (như STM32) chỉ hiểu tín hiệu logic 0V và 3.3V (Tx/Rx). Nó không thể kết nối trực tiếp vào mạng dây CAN_H/CAN_L.
+                </p>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 15px;">Vai trò của Chip CAN Transceiver (ví dụ: TJA1050):</h4>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;"><strong>Chiều truyền (Transmit):</strong> Chuyển đổi mức logic Tx (0V/3.3V) từ vi điều khiển sang tín hiệu điện áp vi sai (CAN_H, CAN_L) đưa lên Bus.</li>
+                    <li style="margin-bottom: 10px;"><strong>Chiều nhận (Receive):</strong> Đọc điện áp vi sai từ mạng dây chuyển thành tín hiệu logic Rx (0V/3.3V) cấp lại cho vi điều khiển xử lý.</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 6px; border-left: 6px solid var(--fpt-orange); display: flex; flex-direction: column; justify-content: center;">
+                <h4 style="color: var(--fpt-orange); margin-bottom: 10px;"><i class="fa-solid fa-microchip"></i> Ghép nối phần cứng dự án</h4>
+                <p style="font-size: 15px; color: var(--text-sub); line-height: 1.6;">
+                    Trong dự án này, chúng ta kết nối chân CAN_TX và CAN_RX của chip STM32 sang các chân TXD/RXD tương ứng của module giải mã TJA1050. <br>
+                    Sau đó nối cổng CAN_H, CAN_L của 2 kit STM32 với nhau để giao tiếp chẩn đoán thật.
+                </p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 33</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide34">
+    <div class="slide-header">
+        <div class="slide-title">Cấu trúc gói tin Frame CAN 2.0B</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 16px; margin-bottom: 15px;">Gói tin CAN truyền trên mạng Bus có cấu trúc chuẩn hóa vô cùng chặt chẽ để đảm bảo không bị lỗi dữ liệu:</p>
+            <table style="font-size: 14px;">
+                <thead>
+                    <tr>
+                        <th style="padding: 10px;">Trường (Field)</th>
+                        <th style="padding: 10px;">Kích thước</th>
+                        <th style="padding: 10px;">Mô tả nhiệm vụ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>SOF (Start of Frame)</strong></td>
+                        <td>1 bit</td>
+                        <td>Đánh dấu điểm bắt đầu gói tin (chuyển mức điện áp từ Recessive sang Dominant).</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Identifier (ID)</strong></td>
+                        <td>11 hoặc 29 bits</td>
+                        <td>Định danh nội dung gói tin và quyết định độ ưu tiên của bản tin trên Bus.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Control Field (DLC)</strong></td>
+                        <td>4 bits</td>
+                        <td>Khai báo kích thước vùng dữ liệu thực tế (từ 0 đến 8 Bytes).</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Data Field</strong></td>
+                        <td>0 đến 8 Bytes</td>
+                        <td>Chứa thông tin tải thực tế (ví dụ: các lệnh dịch vụ chẩn đoán UDS).</td>
+                    </tr>
+                    <tr>
+                        <td><strong>CRC Field</strong></td>
+                        <td>15 bits</td>
+                        <td>Mã kiểm tra sai sót dữ liệu đường truyền. Nhận diện lỗi cực tốt.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ACK Field</strong></td>
+                        <td>2 bits</td>
+                        <td>Bit xác nhận từ các ECU nhận khác. Báo gói tin đã truyền đi thành công.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 34</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide35">
+    <div class="slide-header">
+        <div class="slide-title">Cơ chế Phân xử Bus (Arbitration) tránh va chạm</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <p style="font-size: 18px; line-height: 1.6; margin-bottom: 15px;">
+                    Trên mạng CAN Bus, khi nhiều ECU đồng thời muốn gửi tin, cơ chế **Phân xử không phá hủy** sẽ bảo vệ tính toàn vẹn của đường truyền.
+                </p>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;"><strong>Nguyên tắc ghi đè:</strong> Trạng thái Dominant (logic 0) luôn ghi đè trạng thái Recessive (logic 1).</li>
+                    <li style="margin-bottom: 10px;"><strong>So sánh từng bit ID:</strong> Các ECU đồng thời phát ID của mình lên Bus. ECU nào phát bit Recessive (1) trong khi phát hiện Bus bị kéo xuống Dominant (0) bởi ECU khác sẽ lập tức đầu hàng, chuyển sang chế độ nhận.</li>
+                    <li style="margin-bottom: 10px;"><strong>Độ ưu tiên ID:</strong> ID có giá trị số càng nhỏ thì độ ưu tiên càng cao (chứa nhiều bit 0 Dominant hơn ở đầu).</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 6px; border-top: 4px solid var(--fpt-orange); display: flex; flex-direction: column; justify-content: center;">
+                <h4 style="color: var(--fpt-blue); margin-bottom: 10px;"><i class="fa-solid fa-traffic-light"></i> Không mất mát dữ liệu</h4>
+                <p style="font-size: 15px; color: var(--text-sub); line-height: 1.6;">
+                    ECU thua cuộc phân xử sẽ tự động chờ đến khi mạng Bus rảnh để thử phát lại bản tin. <br>
+                    Quá trình này diễn ra hoàn toàn bằng phần cứng tích hợp sẵn trong chip điều khiển CAN của MCU, không cần viết code xử lý.
+                </p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 35</span>
+    </div>
+</div>
+
+<div class="slide-container section-divider" id="slide36">
+    <div class="num">06.</div>
+    <div class="name">Lập trình CAN Bus trên STM32</div>
+    <div class="line"></div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 36</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide37">
+    <div class="slide-header">
+        <div class="slide-title">Cấu hình Baudrate của CAN trên STM32</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 15px;">
+                    Để tất cả các ECU trong mạng giao tiếp được với nhau, tần số truyền nhận (Baudrate) phải cấu hình hoàn toàn trùng khớp (ví dụ: 500 kbps cho chẩn đoán).
+                </p>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 10px;">Thời gian truyền 1 Bit được chia làm các phân đoạn:</h4>
+                <ul style="padding-left: 20px; font-size: 15px; line-height: 1.6;">
+                    <li style="margin-bottom: 6px;"><strong>Sync_Seg:</strong> Đồng bộ xung nhịp (thường mặc định là 1 Time Quanta).</li>
+                    <li style="margin-bottom: 6px;"><strong>Bit Segment 1 (BS1):</strong> Bao gồm Prop_Seg và Phase_Seg1 để bù đắp trễ đường truyền đường dây.</li>
+                    <li style="margin-bottom: 6px;"><strong>Bit Segment 2 (BS2):</strong> Phase_Seg2 giúp xác định thời điểm lấy mẫu chính xác.</li>
+                </ul>
+                <p style="font-size: 14px; color: var(--text-sub); margin-top: 15px;">
+                    Công thức: <code>Baudrate = CAN_Clock / (Prescaler * (1 + BS1 + BS2))</code>
+                </p>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 6px; display: flex; flex-direction: column; justify-content: center;">
+                <h4 style="color: var(--fpt-orange); margin-bottom: 10px;"><i class="fa-solid fa-calculator"></i> Ví dụ cấu hình (Clock = 42MHz):</h4>
+                <p style="font-size: 14px; line-height: 1.6; color: var(--text-sub);">
+                    Để đạt tốc độ truyền chẩn đoán chuẩn <strong>500 kbps</strong>:<br>
+                    - Prescaler = 6<br>
+                    - BS1 = 11 Tq<br>
+                    - BS2 = 2 Tq<br>
+                    - 1 + BS1 + BS2 = 14 Tq<br>
+                    - Baudrate = 42MHz / (6 * 14) = 500 kbps.
+                </p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 37</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide38">
+    <div class="slide-header">
+        <div class="slide-title">Bộ lọc CAN (CAN Filters) - Tiết kiệm tài nguyên CPU</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <p style="font-size: 18px; line-height: 1.6; margin-bottom: 15px;">
+                    Trên mạng xe hơi, hàng trăm ECU liên tục phát các bản tin lên bus. Nếu CPU của STM32 phải nhảy vào xử lý ngắt nhận cho mọi gói tin thì sẽ bị quá tải ngay lập tức.
+                </p>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 10px;">Giải pháp: Bộ lọc phần cứng (Hardware Filters)</h4>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 8px;"><strong>Chế độ List Mode:</strong> Chỉ cho phép các gói tin có ID nằm trong danh sách khai báo đi qua (thích hợp nhận ID chẩn đoán cố định).</li>
+                    <li style="margin-bottom: 8px;"><strong>Chế độ Mask Mode:</strong> Định nghĩa một bộ "mặt nạ" giúp lọc một nhóm dải ID cùng lúc (phù hợp nhận diện nhiều ECU liên quan).</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 6px; border-left: 6px solid var(--fpt-orange); display: flex; flex-direction: column; justify-content: center;">
+                <h4 style="color: var(--fpt-orange); margin-bottom: 10px;"><i class="fa-solid fa-filter"></i> Lọc ID chẩn đoán dự án</h4>
+                <p style="font-size: 15px; color: var(--text-sub); line-height: 1.6;">
+                    Chúng ta sẽ cấu hình bộ lọc STM32 để chỉ chấp nhận các gói tin có ID chẩn đoán gửi từ máy tính (ví dụ: <code>0x7E0</code>) và bỏ qua toàn bộ các gói tin khác đang truyền trên bus.
+                </p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 38</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide39">
+    <div class="slide-header">
+        <div class="slide-title">Lập trình nhận dữ liệu CAN bằng Interrupt</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 17px; margin-bottom: 15px;">Không dùng hàm đợi vòng lặp vô tận (Polling) để nhận dữ liệu. Hãy sử dụng ngắt (Interrupt) để tối ưu hiệu năng của chip:</p>
+            <div style="background: #1e293b; color: #f8fafc; font-family: monospace; padding: 25px; border-radius: 6px; font-size: 13px; line-height: 1.5; margin-bottom: 15px;">
+                /* 1. Kích hoạt ngắt khi có tin nhắn mới trong Rx FIFO 0 */<br>
+                HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);<br><br>
+                /* 2. Hàm xử lý ngắt Callback tự động kích hoạt bởi phần cứng */<br>
+                void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)<br>
+                {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;CAN_RxHeaderTypeDef RxHeader;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;uint8_t RxData[8];<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;if (hcan->Instance == CAN1) {<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* Lấy gói tin từ bộ nhớ đệm */<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData);<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/* Chuyển tiếp dữ liệu nhận được sang tầng ISO-TP xử lý */<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;IsoTp_ReceiveHandler(RxData, RxHeader.DLC);<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;}<br>
+                }
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 39</span>
+    </div>
+</div>
+
+<div class="slide-container section-divider" id="slide40">
+    <div class="num">07.</div>
+    <div class="name">Tầng vận tải dữ liệu ISO-TP (ISO 15765-2)</div>
+    <div class="line"></div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 40</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide41">
+    <div class="slide-header">
+        <div class="slide-title">Tại sao cần giao thức ISO-TP?</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; margin-top: 20px;">
+            <div>
+                <p style="font-size: 18px; line-height: 1.6; margin-bottom: 20px;">
+                    Một gói tin CAN Bus truyền thống (CAN 2.0B) chỉ có thể mang tối đa <strong>8 Bytes dữ liệu</strong>.
+                </p>
+                <p style="font-size: 18px; line-height: 1.6; margin-bottom: 20px;">
+                    Tuy nhiên, các dịch vụ chẩn đoán UDS thường truyền nhận các gói tin có dung lượng lớn hơn nhiều (Ví dụ: Đọc chuỗi số khung xe VIN dài 17 bytes, truyền file Firmware nâng cấp phần mềm lên tới vài chục Kilobytes).
+                </p>
+                <h4 style="color: var(--fpt-blue);">Giải pháp: Tiêu chuẩn ISO-TP (ISO 15765-2)</h4>
+                <p style="font-size: 16px; color: var(--text-sub);">Đóng vai trò là tầng vận tải, chịu trách nhiệm phân tách gói tin lớn thành các Frame CAN nhỏ để gửi đi, và ghép nối các Frame CAN nhỏ nhận được thành gói tin hoàn chỉnh ở đầu nhận.</p>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                <i class="fa-solid fa-boxes-stack" style="font-size: 80px; color: var(--fpt-orange); margin-bottom: 15px;"></i>
+                <h4 style="color: var(--text-main);">Phân mảnh gói tin</h4>
+                <p style="font-size: 14px; color: var(--text-sub);">Cho phép truyền tải chiều dài gói tin lý thuyết lên tới tối đa <strong>4095 Bytes</strong> qua đường truyền CAN vật lý.</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 41</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide42">
+    <div class="slide-header">
+        <div class="slide-title">Bốn loại Frame chính trong cấu trúc ISO-TP</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 17px; margin-bottom: 15px;">ISO-TP định nghĩa Byte đầu tiên trong vùng dữ liệu 8-byte của CAN Frame làm mã định dạng Frame:</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 15px;">
+                <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px;">
+                    <h4 style="color: var(--fpt-blue); margin-bottom: 8px;">1. Single Frame (SF) - Type 0</h4>
+                    <p style="font-size: 14px; color: var(--text-sub); margin-bottom: 8px;">Dùng khi toàn bộ gói tin chẩn đoán nhỏ hơn hoặc bằng 7 Bytes. Truyền trực tiếp trong 1 Frame duy nhất.</p>
+                    <code>[Byte 0: 0x0_ + Length] [Byte 1..7: Data]</code>
+                </div>
+                <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px;">
+                    <h4 style="color: var(--fpt-orange); margin-bottom: 8px;">2. First Frame (FF) - Type 1</h4>
+                    <p style="font-size: 14px; color: var(--text-sub); margin-bottom: 8px;">Bản tin khởi đầu cho chuỗi truyền gói dữ liệu lớn. Khai báo tổng chiều dài gói chẩn đoán sắp truyền.</p>
+                    <code>[Byte 0: 0x1_] [Byte 1: Total Length] [Byte 2..7: Data]</code>
+                </div>
+                <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px;">
+                    <h4 style="color: var(--fpt-green); margin-bottom: 8px;">3. Flow Control (FC) - Type 3</h4>
+                    <p style="font-size: 14px; color: var(--text-sub); margin-bottom: 8px;">Phát từ đầu nhận gửi ngược lại đầu truyền để điều phối tốc độ, khai báo kích thước bộ đệm sẵn sàng nhận.</p>
+                    <code>[Byte 0: 0x30 (CTS)] [Byte 1: Block Size] [Byte 2: STmin]</code>
+                </div>
+                <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px;">
+                    <h4 style="color: var(--fpt-blue); margin-bottom: 8px;">4. Consecutive Frame (CF) - Type 2</h4>
+                    <p style="font-size: 14px; color: var(--text-sub); margin-bottom: 8px;">Các bản tin nối tiếp chứa phần dữ liệu còn lại của gói tin. Đánh số thứ tự tăng dần (Sequence Number) từ 1 đến 15.</p>
+                    <code>[Byte 0: 0x2_ + SeqNum] [Byte 1..7: Remaining Data]</code>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 42</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide43">
+    <div class="slide-header">
+        <div class="slide-title">Sơ đồ hoạt động truyền nhận Multi-frame ISO-TP</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 40px; margin-top: 15px;">
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 6px; display: flex; flex-direction: column; justify-content: center;">
+                <h4 style="color: var(--fpt-blue); margin-bottom: 10px;">Thứ tự bắt tay truyền tin:</h4>
+                <ol style="padding-left: 20px; font-size: 15px; line-height: 1.8;">
+                    <li><strong>Sender</strong> gửi bản tin khởi đầu <strong>First Frame (FF)</strong> báo muốn gửi 20 bytes.</li>
+                    <li><strong>Receiver</strong> nhận được FF, gửi lại bản tin điều phối <strong>Flow Control (FC)</strong> xác nhận sẵn sàng nhận (CTS = 0), yêu cầu truyền liên tiếp (Block Size = 0) và khoảng thời gian trễ giữa các gói STmin = 10ms.</li>
+                    <li><strong>Sender</strong> bắt đầu gửi chuỗi bản tin nối tiếp <strong>Consecutive Frame (CF)</strong> chứa phần dữ liệu còn lại cho đến khi đủ 20 bytes.</li>
+                </ol>
+            </div>
+            <div style="background: #1e293b; color: #34d399; font-family: monospace; padding: 20px; border-radius: 6px; font-size: 14px; line-height: 1.6;">
+                <span style="color: #a7f3d0;">Sender --[ FF: Length=20, Data... ]--&gt; Receiver</span><br>
+                <span style="color: #fbcfe8;">Sender &lt;--[ FC: CTS=0, BS=0, STmin=10ms ]-- Receiver</span><br>
+                <span style="color: #a7f3d0;">Sender --[ CF: Seq=1, Data... ]--&gt; Receiver</span><br>
+                <span style="color: #a7f3d0;">Sender --[ CF: Seq=2, Data... ]--&gt; Receiver</span><br>
+                <span style="color: #a7f3d0;">Sender --[ CF: Seq=3, Data... ]--&gt; Receiver</span><br><br>
+                <span style="color: #ffffff;">=== Hoàn thành nhận đủ 20 Bytes dữ liệu ===</span>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 43</span>
+    </div>
+</div>
+
+<div class="slide-container section-divider" id="slide44">
+    <div class="num">08.</div>
+    <div class="name">Tiêu chuẩn chẩn đoán UDS (ISO 14229)</div>
+    <div class="line"></div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 44</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide45">
+    <div class="slide-header">
+        <div class="slide-title">UDS (Unified Diagnostic Services) là gì?</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <p style="font-size: 18px; line-height: 1.6; margin-bottom: 15px;">
+                    <strong>UDS (ISO 14229)</strong> là tiêu chuẩn giao thức chẩn đoán thống nhất toàn cầu được hầu hết các hãng xe lớn trên thế giới sử dụng.
+                </p>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8;">
+                    <li style="margin-bottom: 10px;"><strong>Mô hình Client-Server:</strong> Thiết bị chẩn đoán (PC, máy quét lỗi) là <strong>Client</strong> gửi yêu cầu (Request) -> ECU trên xe đóng vai trò là <strong>Server</strong> phản hồi kết quả (Response).</li>
+                    <li style="margin-bottom: 10px;"><strong>Định dạng Service ID (SID):</strong> Mỗi dịch vụ chẩn đoán được đại diện bằng một mã số Hex 1 byte duy nhất.</li>
+                </ul>
+            </div>
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+                <i class="fa-solid fa-comments" style="font-size: 80px; color: var(--fpt-blue); margin-bottom: 15px;"></i>
+                <h4 style="color: var(--fpt-orange);">Client / Server</h4>
+                <p style="font-size: 14px; color: var(--text-sub);">Hội thoại hỏi-đáp liên tục giúp kiểm soát toàn bộ vòng đời hoạt động của hệ thống phần cứng trên xe.</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 45</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide46">
+    <div class="slide-header">
+        <div class="slide-title">Cấu trúc Bản tin UDS Request & Response</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 16px; margin-bottom: 15px;">Một phiên giao tiếp chẩn đoán UDS luôn diễn ra theo luồng định dạng dữ liệu chuẩn:</p>
+            <div style="display: grid; grid-template-columns: 1fr; gap: 15px; font-family: monospace; font-size: 16px;">
+                <div style="background: #eff6ff; border-left: 6px solid #3b82f6; padding: 15px; border-radius: 4px; color: #1e3a8a;">
+                    <strong>1. Diagnostic Request (Client -> ECU Server):</strong><br>
+                    <code>[Byte 0: SID (1 Byte)] [Byte 1: Sub-function / Parameter] [Byte 2..N: Data Parameters]</code>
+                </div>
+                <div style="background: #ecfdf5; border-left: 6px solid #10b981; padding: 15px; border-radius: 4px; color: #064e3b;">
+                    <strong>2. Positive Response (ECU Server xử lý thành công):</strong><br>
+                    <code>[Byte 0: SID + 0x40] [Byte 1: Sub-function / Echo Parameter] [Byte 2..N: Response Data]</code>
+                </div>
+                <div style="background: #fef2f2; border-left: 6px solid #ef4444; padding: 15px; border-radius: 4px; color: #7f1d1d;">
+                    <strong>3. Negative Response (ECU Server phát hiện yêu cầu lỗi hoặc từ chối):</strong><br>
+                    <code>[Byte 0: 0x7F (Mã cố định NRC)] [Byte 1: SID bị từ chối] [Byte 2: NRC (Negative Response Code)]</code>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 46</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide47">
+    <div class="slide-header">
+        <div class="slide-title">Dịch vụ 0x10 - Diagnostic Session Control</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <p style="font-size: 17px; line-height: 1.6; margin-bottom: 15px;">
+                    Dịch vụ chuyển đổi phiên chẩn đoán, cho phép mở rộng các quyền truy cập vào các tính năng bảo mật cao hơn của ECU.
+                </p>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 10px;">Ba loại Session chính được định nghĩa trong dự án:</h4>
+                <ul style="padding-left: 20px; font-size: 15px; line-height: 1.6;">
+                    <li style="margin-bottom: 8px;"><strong>Default Session (0x01):</strong> Trạng thái khởi tạo mặc định khi ECU khởi động. Chỉ cho phép đọc các dữ liệu cơ bản không nhạy cảm.</li>
+                    <li style="margin-bottom: 8px;"><strong>Programming Session (0x02):</strong> Phiên làm việc dành riêng cho tác vụ ghi đè phần mềm, flash bootloader.</li>
+                    <li style="margin-bottom: 8px;"><strong>Extended Session (0x03):</strong> Phiên chẩn đoán mở rộng. Cho phép truy cập các cảm biến chuyên sâu, điều khiển cơ cấu chấp hành trực tiếp.</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px; font-family: monospace; font-size: 13px; display: flex; flex-direction: column; justify-content: center;">
+                <p style="color: #2563eb; font-weight: bold; margin-bottom: 5px;"># Yêu cầu chuyển sang Extended Session</p>
+                <p style="background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px;">Request: 10 03</p>
+                <p style="color: #16a34a; font-weight: bold; margin-bottom: 5px;"># ECU đồng ý chuyển Session</p>
+                <p style="background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">Positive: 50 03 [Params...]</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 47</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide48">
+    <div class="slide-header">
+        <div class="slide-title">Dịch vụ 0x22 - Read Data By Identifier (Read DID)</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <p style="font-size: 17px; line-height: 1.6; margin-bottom: 15px;">
+                    Cho phép thiết bị chẩn đoán đọc các tham số vận hành thời gian thực từ ECU thông qua các mã định danh định sẵn gọi là **DID (Data Identifier - 2 Bytes)**.
+                </p>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 10px;">Các DID định nghĩa trong dự án của chúng ta:</h4>
+                <ul style="padding-left: 20px; font-size: 15px; line-height: 1.6;">
+                    <li style="margin-bottom: 6px;"><code>0xF190</code>: Mã số khung xe (VIN) (Yêu cầu trả về chuỗi 17 ký tự).</li>
+                    <li style="margin-bottom: 6px;"><code>0x0100</code>: Nhiệt độ cảm biến động cơ (Trả về 1 byte giá trị).</li>
+                    <li style="margin-bottom: 6px;"><code>0x0101</code>: Tốc độ động cơ thực tế RPM (Trả về dữ liệu 2 bytes).</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px; font-family: monospace; font-size: 13px; display: flex; flex-direction: column; justify-content: center;">
+                <p style="color: #2563eb; font-weight: bold; margin-bottom: 5px;"># Đọc mã số khung xe VIN (0xF190)</p>
+                <p style="background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px;">Request: 22 F1 90</p>
+                <p style="color: #16a34a; font-weight: bold; margin-bottom: 5px;"># ECU trả về chuỗi kí tự VIN</p>
+                <p style="background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">Response: 62 F1 90 [17 Bytes VIN Data]</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 48</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide49">
+    <div class="slide-header">
+        <div class="slide-title">Dịch vụ 0x2E - Write Data By Identifier (Write DID)</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <p style="font-size: 17px; line-height: 1.6; margin-bottom: 15px;">
+                    Dịch vụ cho phép ghi đè/hiệu chỉnh các giá trị tham số cấu hình lưu trong ECU Server thông qua mã định danh DID.
+                </p>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 10px;">Ứng dụng thực tế:</h4>
+                <ul style="padding-left: 20px; font-size: 15px; line-height: 1.6;">
+                    <li style="margin-bottom: 8px;">Cài đặt lại ngày tháng bảo dưỡng xe định kỳ tiếp theo vào bộ nhớ hộp đen.</li>
+                    <li style="margin-bottom: 8px;">Cập nhật cấu hình lốp xe mới thay đổi.</li>
+                </ul>
+                <p style="font-size: 14px; color: var(--text-sub); margin-top: 15px;">
+                    <strong>Yêu cầu bảo mật:</strong> Dịch vụ 0x2E thường bị ECU từ chối ở Default Session. Nó đòi hỏi Client phải chuyển sang Extended Session (0x03) và vượt qua bảo mật 0x27 trước mới cho phép ghi đè.
+                </p>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px; font-family: monospace; font-size: 13px; display: flex; flex-direction: column; justify-content: center;">
+                <p style="color: #2563eb; font-weight: bold; margin-bottom: 5px;"># Ghi mã cấu hình VIN mới</p>
+                <p style="background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px;">Request: 2E F1 90 [17 Bytes VIN...]</p>
+                <p style="color: #16a34a; font-weight: bold; margin-bottom: 5px;"># ECU xác nhận ghi thành công</p>
+                <p style="background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">Response: 6E F1 90</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 49</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide50">
+    <div class="slide-header">
+        <div class="slide-title">Dịch vụ 0x27 - Security Access (Seed & Key)</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 17px; margin-bottom: 15px;">Cơ chế bảo mật Seed & Key giúp ECU xác thực chính xác thiết bị kết nối có phải công cụ chính hãng hay không:</p>
+            <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 30px;">
+                <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px; font-size: 14px; line-height: 1.8;">
+                    <h4 style="color: var(--fpt-blue); margin-bottom: 10px;">Các bước bắt tay bảo mật:</h4>
+                    <ol style="padding-left: 20px;">
+                        <li><strong>Client gửi yêu cầu lấy Seed:</strong> Gửi dịch vụ 0x27 với sub-function là <code>0x01</code>.</li>
+                        <li><strong>ECU sinh chuỗi ngẫu nhiên (Seed):</strong> ECU trả về một dãy số ngẫu nhiên ngầm sinh (ví dụ: 4 bytes).</li>
+                        <li><strong>Tính toán khóa (Key):</strong> Cả Client và ECU độc lập chạy một thuật toán mã hóa bí mật (ví dụ: AES, XOR...) trên chuỗi Seed để sinh ra Key.</li>
+                        <li><strong>Client gửi Key:</strong> Gửi lại dịch vụ 0x27 với sub-function <code>0x02</code> kèm theo Key vừa tính.</li>
+                        <li><strong>ECU đối chiếu:</strong> So khớp Key nhận được từ Client với Key tự tính. Nếu khớp, ECU sẽ mở khóa các dịch vụ bảo vệ.</li>
+                    </ol>
+                </div>
+                <div style="background: #1e293b; color: #34d399; font-family: monospace; padding: 20px; border-radius: 6px; font-size: 13px; line-height: 1.5; display: flex; flex-direction: column; justify-content: center;">
+                    <p style="color: #a7f3d0;"># 1. Yêu cầu Seed</p>
+                    <p style="color: #fff; margin-bottom: 10px;">Request: 27 01<br>Response: 67 01 AA BB CC DD (Seed)</p>
+                    <p style="color: #a7f3d0;"># 2. Gửi Key để xác thực</p>
+                    <p style="color: #fff;">Request: 27 02 EE FF 11 22 (Key)<br>Response: 67 02 (Xác nhận mở khóa thành công)</p>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 50</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide51">
+    <div class="slide-header">
+        <div class="slide-title">Dịch vụ 0x11 - ECU Reset</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; margin-top: 15px;">
+            <div>
+                <p style="font-size: 17px; line-height: 1.6; margin-bottom: 15px;">
+                    Yêu cầu vi điều khiển khởi động lại (Reset) để áp dụng các thay đổi cấu hình hoặc nạp firmware mới thành công.
+                </p>
+                <h4 style="color: var(--fpt-blue); margin-bottom: 10px;">Hai chế độ Reset thường dùng:</h4>
+                <ul style="padding-left: 20px; font-size: 15px; line-height: 1.6;">
+                    <li style="margin-bottom: 10px;"><strong>Hard Reset (0x01):</strong> Mô phỏng việc ngắt hẳn nguồn điện cấp trực tiếp từ bình ắc quy xe đến ECU và cấp lại ngay lập tức.</li>
+                    <li style="margin-bottom: 10px;"><strong>Soft Reset (0x02):</strong> ECU chỉ khởi chạy lại phần mềm thông qua hàm Reset nội của vi điều khiển (Ví dụ gọi ngắt Reset hệ thống: <code>NVIC_SystemReset()</code> trong mã nguồn STM32).</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 20px; border-radius: 6px; font-family: monospace; font-size: 13px; display: flex; flex-direction: column; justify-content: center;">
+                <p style="color: #2563eb; font-weight: bold; margin-bottom: 5px;"># Yêu cầu Soft Reset</p>
+                <p style="background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px;">Request: 11 02</p>
+                <p style="color: #16a34a; font-weight: bold; margin-bottom: 5px;"># ECU đồng ý và chuẩn bị reset hệ thống</p>
+                <p style="background: #fff; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">Response: 51 02</p>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 51</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide52">
+    <div class="slide-header">
+        <div class="slide-title">Mã Phản hồi Từ chối UDS (Negative Response Codes)</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 17px; margin-bottom: 15px;">Khi ECU từ chối thực hiện một dịch vụ yêu cầu, nó sẽ trả về mã 0x7F kèm mã lý do lỗi **NRC (1 Byte)**:</p>
+            <table style="font-size: 14px;">
+                <thead>
+                    <tr>
+                        <th style="padding: 10px;">Mã lỗi NRC</th>
+                        <th style="padding: 10px;">Tên lỗi (NRC Name)</th>
+                        <th style="padding: 10px;">Ý nghĩa & Trường hợp xảy ra</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>0x11</strong></td>
+                        <td>Service Not Supported</td>
+                        <td>Mã SID gửi lên không được ECU hỗ trợ hoặc chưa lập trình.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>0x12</strong></td>
+                        <td>Sub-function Not Supported</td>
+                        <td>Hỗ trợ SID nhưng mã Sub-function gửi lên không tồn tại.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>0x13</strong></td>
+                        <td>Incorrect Message Length</td>
+                        <td>Gói tin yêu cầu sai định dạng kích thước quy định.</td>
+                    </tr>
+                    <tr>
+                        <td><strong>0x22</strong></td>
+                        <td>Conditions Not Correct</td>
+                        <td>Điều kiện hiện tại của xe không thỏa mãn để chạy dịch vụ (Ví dụ: Yêu cầu reset khi xe đang di chuyển).</td>
+                    </tr>
+                    <tr>
+                        <td><strong>0x33</strong></td>
+                        <td>Security Access Denied</td>
+                        <td>Client chưa thực hiện mở khóa bảo mật 0x27 trước khi thực thi lệnh ghi dữ liệu nhạy cảm.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 52</span>
+    </div>
+</div>
+
+<div class="slide-container" id="slide53">
+    <div class="slide-header">
+        <div class="slide-title">Lộ trình triển khai & Kế hoạch Thực tập</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        
+        <div style="margin-top: 15px;">
+            <p style="font-size: 18px; margin-bottom: 20px;">Lộ trình phân bổ thời gian dự án tối ưu dành cho nhóm phát triển:</p>
+            <div style="display: flex; justify-content: space-between; position: relative; padding-top: 60px; height: 180px;">
+                <div style="position: absolute; top: 70px; left: 0; width: 100%; height: 4px; background: var(--fpt-orange); opacity: 0.3; z-index: 1;"></div>
+                <div style="width: 22%; text-align: center; position: relative; z-index: 2;">
+                    <div style="width: 24px; height: 24px; background: var(--fpt-orange); border-radius: 50%; margin: 0 auto 15px auto; box-shadow: 0 0 10px var(--fpt-orange);"></div>
+                    <h5 style="color: var(--fpt-blue); font-size: 16px; margin-bottom: 5px;">Tuần 1 - 2</h5>
+                    <p style="font-size: 13px; color: var(--text-sub);">Setup dự án, kết nối dây điện phần cứng, bring-up driver truyền nhận CAN cơ bản.</p>
+                </div>
+                <div style="width: 22%; text-align: center; position: relative; z-index: 2;">
+                    <div style="width: 24px; height: 24px; background: var(--fpt-blue); border-radius: 50%; margin: 0 auto 15px auto;"></div>
+                    <h5 style="color: var(--fpt-blue); font-size: 16px; margin-bottom: 5px;">Tuần 3 - 4</h5>
+                    <p style="font-size: 13px; color: var(--text-sub);">Tích hợp thành công tầng phân mảnh dữ liệu ISO-TP.</p>
+                </div>
+                <div style="width: 22%; text-align: center; position: relative; z-index: 2;">
+                    <div style="width: 24px; height: 24px; background: var(--fpt-green); border-radius: 50%; margin: 0 auto 15px auto;"></div>
+                    <h5 style="color: var(--fpt-blue); font-size: 16px; margin-bottom: 5px;">Tuần 5 - 6</h5>
+                    <p style="font-size: 13px; color: var(--text-sub);">Hiện thực hóa đầy đủ các dịch vụ chẩn đoán UDS.</p>
+                </div>
+                <div style="width: 22%; text-align: center; position: relative; z-index: 2;">
+                    <div style="width: 24px; height: 24px; background: var(--fpt-orange); border-radius: 50%; margin: 0 auto 15px auto;"></div>
+                    <h5 style="color: var(--fpt-blue); font-size: 16px; margin-bottom: 5px;">Tuần 7 - 8</h5>
+                    <p style="font-size: 13px; color: var(--text-sub);">Chạy kịch bản test tự động, tối ưu hiệu năng, viết báo cáo thực tập.</p>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 53</span>
+    </div>
+</div>
+
+
+<div class="slide-container" id="slide54">
+    <div class="slide-header">
+        <div class="slide-title">CAN Controller vs CAN Transceiver</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 15px;">
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 8px; border-top: 6px solid var(--fpt-blue);">
+                <h3 style="color: var(--fpt-blue); font-size: 24px; margin-bottom: 18px;"><i class="fa-solid fa-microchip"></i> CAN Controller</h3>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 16px; color: var(--text-main);">
+                    CAN Controller là khối ngoại vi nằm trong MCU, ví dụ trong STM32. Khối này xử lý phần <strong>logic/protocol</strong> của CAN frame.
+                </p>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8; color: #334155;">
+                    <li>Đóng gói và giải mã CAN frame.</li>
+                    <li>Quản lý Identifier, DLC, Data, ACK, CRC.</li>
+                    <li>Thực hiện arbitration, error handling ở mức controller.</li>
+                    <li>Cung cấp mailbox, FIFO, filter và interrupt cho firmware.</li>
+                    <li>Làm việc với tín hiệu logic <code>CAN_TX</code> và <code>CAN_RX</code>.</li>
+                </ul>
+            </div>
+            <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 8px; border-top: 6px solid var(--fpt-orange);">
+                <h3 style="color: var(--fpt-orange); font-size: 24px; margin-bottom: 18px;"><i class="fa-solid fa-wave-square"></i> CAN Transceiver</h3>
+                <p style="font-size: 16px; line-height: 1.6; margin-bottom: 16px; color: var(--text-main);">
+                    CAN Transceiver là chip/module phần cứng bên ngoài MCU. Nó chuyển đổi tín hiệu logic từ MCU sang tín hiệu vi sai vật lý trên bus.
+                </p>
+                <ul style="padding-left: 20px; font-size: 16px; line-height: 1.8; color: #334155;">
+                    <li>Nhận <code>TXD</code> từ MCU và tạo tín hiệu <code>CAN_H</code>/<code>CAN_L</code>.</li>
+                    <li>Đọc tín hiệu vi sai trên bus và xuất <code>RXD</code> về MCU.</li>
+                    <li>Không xử lý UDS, DID, DTC hay application logic.</li>
+                    <li>Cần cấp đúng điện áp theo module, ví dụ 3.3V hoặc 5V.</li>
+                    <li>Là thành phần bắt buộc nếu muốn kết nối CAN vật lý thật.</li>
+                </ul>
+            </div>
+        </div>
+        <div style="margin-top: 22px; background: #fff7ed; border-left: 8px solid var(--fpt-orange); padding: 18px 22px; border-radius: 6px;">
+            <p style="font-size: 17px; line-height: 1.5; color: #7c2d12; margin: 0;">
+                <strong>Thông điệp chính:</strong> STM32 có CAN Controller, nhưng không thể nối trực tiếp vào CAN_H/CAN_L. Muốn giao tiếp trên bus CAN thật, luôn cần CAN Transceiver.
+            </p>
+        </div>
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 54</span>
+    </div>
+</div>
+
+
+<div class="slide-container" id="slide55">
+    <div class="slide-header">
+        <div class="slide-title">Luồng tín hiệu: STM32 → Transceiver → CAN Bus</div>
+        <div class="title-underline"></div>
+    </div>
+    <div class="content-area">
+        <div style="display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 35px; margin-top: 15px; align-items: center;">
+            <div style="height: 390px;">
+                <svg viewBox="0 0 620 390" style="width:100%; height:100%; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; font-family:'Inter',sans-serif;">
+                    <rect x="35" y="90" width="150" height="150" rx="10" fill="#034ea2"/>
+                    <text x="110" y="130" fill="white" font-weight="800" font-size="16" text-anchor="middle">STM32 MCU</text>
+                    <text x="110" y="158" fill="white" font-size="12" text-anchor="middle">CAN Controller</text>
+                    <text x="110" y="190" fill="#dbeafe" font-size="11" text-anchor="middle">HAL CAN / FDCAN</text>
+                    <text x="110" y="215" fill="#dbeafe" font-size="11" text-anchor="middle">Mailbox + FIFO + Filter</text>
+
+                    <rect x="270" y="98" width="145" height="134" rx="10" fill="#ffffff" stroke="#f37021" stroke-width="4"/>
+                    <text x="342" y="135" fill="#f37021" font-weight="800" font-size="16" text-anchor="middle">CAN</text>
+                    <text x="342" y="158" fill="#f37021" font-weight="800" font-size="16" text-anchor="middle">Transceiver</text>
+                    <text x="342" y="190" fill="#334155" font-size="11" text-anchor="middle">TXD/RXD ↔ CANH/CANL</text>
+
+                    <line x1="185" y1="130" x2="270" y2="130" stroke="#2563eb" stroke-width="4" marker-end="url(#arrowBlue)"/>
+                    <text x="228" y="118" fill="#2563eb" font-weight="700" font-size="12" text-anchor="middle">CAN_TX / TXD</text>
+                    <line x1="270" y1="200" x2="185" y2="200" stroke="#10b981" stroke-width="4" marker-end="url(#arrowGreen)"/>
+                    <text x="227" y="218" fill="#047857" font-weight="700" font-size="12" text-anchor="middle">CAN_RX / RXD</text>
+
+                    <line x1="415" y1="130" x2="570" y2="130" stroke="#f37021" stroke-width="5"/>
+                    <line x1="415" y1="200" x2="570" y2="200" stroke="#034ea2" stroke-width="5"/>
+                    <text x="500" y="116" fill="#f37021" font-weight="800" font-size="13" text-anchor="middle">CAN_H</text>
+                    <text x="500" y="222" fill="#034ea2" font-weight="800" font-size="13" text-anchor="middle">CAN_L</text>
+
+                    <rect x="458" y="252" width="70" height="34" rx="4" fill="#fff7ed" stroke="#f37021" stroke-width="2"/>
+                    <text x="493" y="274" fill="#7c2d12" font-weight="700" font-size="12" text-anchor="middle">120Ω</text>
+                    <line x1="493" y1="130" x2="493" y2="252" stroke="#64748b" stroke-width="2" stroke-dasharray="5,5"/>
+                    <line x1="493" y1="286" x2="493" y2="200" stroke="#64748b" stroke-width="2" stroke-dasharray="5,5"/>
+
+                    <text x="310" y="330" fill="#0f172a" font-weight="800" font-size="14" text-anchor="middle">Signal path in the student project</text>
+                    <text x="310" y="355" fill="#64748b" font-size="12" text-anchor="middle">Application/UDS → CanIf → HAL CAN → Transceiver → CAN Bus</text>
+
+                    <defs>
+                        <marker id="arrowBlue" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                            <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+                        </marker>
+                        <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+                            <path d="M0,0 L0,6 L9,3 z" fill="#10b981" />
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+            <div>
+                <h3 style="font-size: 23px; color: var(--fpt-blue); margin-bottom: 14px;">Những điểm sinh viên cần nhớ</h3>
+                <ul style="padding-left: 22px; font-size: 16px; line-height: 1.8; color: #334155;">
+                    <li><strong>Firmware</strong> không gửi trực tiếp CAN_H/CAN_L; firmware gửi CAN frame qua CAN peripheral.</li>
+                    <li><strong>CAN_TX/CAN_RX</strong> là tín hiệu logic giữa STM32 và transceiver.</li>
+                    <li><strong>CAN_H/CAN_L</strong> là tín hiệu vật lý vi sai giữa các node trên bus.</li>
+                    <li><strong>GND chung</strong> giữa các board/transceiver là điều kiện cần trong setup lab.</li>
+                    <li><strong>Termination 120Ω</strong> đặt ở hai đầu bus giúp giảm phản xạ tín hiệu.</li>
+                    <li>Khi debug lỗi CAN, cần tách lỗi theo tầng: wiring → transceiver → CAN config → filter → callback → application.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="footer">
+        <span>© Copyright FPT</span>
+        <span>fpt.auto | Slide 55</span>
+    </div>
+</div>
+
+<!-- Nav Control Panel -->
+<div class="nav-controls">
+    <button class="nav-btn" onclick="prevSlide()"><i class="fas fa-chevron-left"></i></button>
+    <span class="nav-info" id="slide-number">Slide 1 / 55</span>
+    <button class="nav-btn" onclick="nextSlide()"><i class="fas fa-chevron-right"></i></button>
+</div>
+
+<script>
+    let currentSlide = 1;
+    const totalSlides = 55;
+
+    function getSectionName(n) {
+        if (n <= 26) return "Bootcamp 1: Giới thiệu & Quy trình";
+        if (n <= 53) return "Bootcamp 2: CAN & UDS Chuyên sâu";
+        return "Bổ sung: CAN Controller & CAN Transceiver";
+    }
+
+    function createPlaceholder(n) {
+        if (document.getElementById('slide' + n)) return;
+
+        const div = document.createElement('div');
+        div.className = 'slide-container';
+        div.id = 'slide' + n;
+        
+        let titleText = `Nội dung chi tiết - Trang ${n}`;
+        let listItems = "";
+
+        if (n <= 26) {
+            titleText = `Phần 1: Quy trình & Thực hành lớp (Slide ${n})`;
+            listItems = `
+                <li style="margin-bottom: 12px;"><i class="fa-solid fa-check" style="color:var(--fpt-orange); margin-right:10px;"></i> Chi tiết về cấu trúc thư mục, thiết lập task Scrum/Agile, quản lý file nhúng.</li>
+                <li style="margin-bottom: 12px;"><i class="fa-solid fa-code-fork" style="color:var(--fpt-blue); margin-right:10px;"></i> Kỹ năng quản lý source code bằng Git, chiến lược chia nhánh và quy tắc Commit.</li>
+                <li style="margin-bottom: 12px;"><i class="fa-solid fa-vial" style="color:var(--fpt-green); margin-right:10px;"></i> Áp dụng chuẩn code sạch (MISRA C) và thực hiện hoạt động Code Review trên lớp.</li>
+            `;
+        } else {
+            titleText = `Phần 2: Giao thức CAN & Chẩn đoán UDS (Slide ${n})`;
+            listItems = `
+                <li style="margin-bottom: 12px;"><i class="fa-solid fa-bolt" style="color:var(--fpt-orange); margin-right:10px;"></i> Phân tích đặc tính vật lý tín hiệu vi sai CAN_H, CAN_L và Transceiver.</li>
+                <li style="margin-bottom: 12px;"><i class="fa-solid fa-link" style="color:var(--fpt-blue); margin-right:10px;"></i> Cách thức triển khai tầng ISO-TP (FF, SF, FC, CF) trên mã nguồn STM32.</li>
+                <li style="margin-bottom: 12px;"><i class="fa-solid fa-lock" style="color:var(--fpt-green); margin-right:10px;"></i> Phát triển dịch vụ UDS (0x10, 0x22, 0x27, 0x11) và kiểm thử chẩn đoán tự động bằng Python.</li>
+            `;
+        }
+
+        div.innerHTML = `
+            <div class="slide-header">
+                <div class="slide-title">${titleText}</div>
+                <div class="title-underline"></div>
+            </div>
+            <div class="content-area">
+                <div style="display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; margin-top: 20px;">
+                    <div>
+                        <p style="font-size: 18px; line-height: 1.6; margin-bottom: 20px;">
+                            <strong>${getSectionName(n)}</strong>
+                        </p>
+                        <ul style="list-style: none; font-size: 16px; line-height: 1.8;">
+                            ${listItems}
+                        </ul>
+                    </div>
+                    <div style="background: var(--fpt-grey-light); padding: 25px; border-radius: 8px; border-top: 4px solid var(--fpt-blue); display: flex; flex-direction: column; justify-content: center;">
+                        <h4 style="color: var(--fpt-blue); margin-bottom: 10px;"><i class="fa-solid fa-graduation-cap"></i> Hướng dẫn cho Giảng viên</h4>
+                        <p style="font-size: 14px; color: var(--text-sub); line-height: 1.6;">
+                            Slide này được ánh xạ trực tiếp từ tài liệu Speaker Notes của bạn. Bạn có thể sử dụng các hình vẽ kỹ thuật nhúng hoặc demo code tương tự để bổ trợ trực quan cho sinh viên.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="footer">
+                <span>© Copyright FPT</span>
+                <span>fpt.auto | Slide ${n}</span>
+            </div>
+        `;
+        document.body.appendChild(div);
+    }
+
+    function showSlide(n) {
+        createPlaceholder(n);
+        
+        document.querySelectorAll('.slide-container').forEach(s => s.classList.remove('active'));
+        document.getElementById('slide' + n).classList.add('active');
+        document.getElementById('slide-number').innerText = `Slide ${n} / ${totalSlides}`;
+        currentSlide = n;
+        
+        window.scrollTo(0, 0);
+    }
+
+    function nextSlide() { if (currentSlide < totalSlides) showSlide(currentSlide + 1); }
+    function prevSlide() { if (currentSlide > 1) showSlide(currentSlide - 1); }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === "ArrowRight") nextSlide();
+        if (e.key === "ArrowLeft") prevSlide();
+    });
+
+    for (let i = 1; i <= totalSlides; i++) {
+        createPlaceholder(i);
+    }
+    
+    showSlide(1);
+</script>
+
+</body>
+</html>
