@@ -83,7 +83,8 @@ typedef enum
     ISOTP_ERR_FC_OVERFLOW       = 8u,   /* Phia nhan bao tran             */
     ISOTP_ERR_TX_TIMEOUT        = 9u,   /* Het gio cho Flow Control       */
     ISOTP_ERR_RX_TIMEOUT        = 10u,  /* Het gio cho Consecutive Frame  */
-    ISOTP_ERR_NOT_INITIALISED   = 11u   /* Chua goi IsoTp_Init            */
+    ISOTP_ERR_NOT_INITIALISED   = 11u,  /* Chua goi IsoTp_Init            */
+    ISOTP_ERR_SEND_FAILED       = 12u   /* canSend bao gui that bai       */
 } IsoTp_ErrorCodeType;
 
 /*----------------------------------------------------------------------------
@@ -94,7 +95,11 @@ typedef enum
 typedef void (*IsoTp_RxCallbackType)(const uint8_t *message, uint16_t length);
 
 /** Ham gui mot CAN frame xuong tang duoi (CanIf). */
-typedef void (*IsoTp_CanSendType)(const uint8_t *frame, uint8_t dlc);
+/**
+ * @brief  Kieu ham gui frame xuong CanIf.
+ * @return 0 neu gui thanh cong, khac 0 neu that bai.
+ */
+typedef uint8_t (*IsoTp_CanSendType)(const uint8_t *frame, uint8_t dlc);
 
 /*----------------------------------------------------------------------------
  * Trang thai may truyen (TX)
@@ -170,19 +175,25 @@ IsoTp_StatusType IsoTp_Init(IsoTp_CanSendType    canSendFunction,
 
 /**
  * @brief  Gui mot ban tin qua ISO-TP.
- * @param  message  Con tro toi du lieu can gui (khong duoc NULL).
- * @param  length   So byte cua du lieu (1..ISOTP_MAX_MESSAGE_SIZE).
+ * @param  message        Con tro toi du lieu can gui (khong duoc NULL).
+ * @param  length         So byte cua du lieu (1..ISOTP_MAX_MESSAGE_SIZE).
+ * @param  currentTimeMs  Thoi diem hien tai (de bat timeout N_Bs).
  * @return ISOTP_OK, hoac ma loi tuong ung.
  */
-IsoTp_StatusType IsoTp_Send(const uint8_t *message, uint16_t length);
+IsoTp_StatusType IsoTp_Send(const uint8_t *message,
+                            uint16_t       length,
+                            uint32_t       currentTimeMs);
 
 /**
  * @brief  Xu ly mot CAN frame nhan duoc tu tang duoi.
- * @param  frame  Con tro toi 8 byte cua CAN frame (khong duoc NULL).
- * @param  dlc    So byte hop le trong frame (1..8).
+ * @param  frame          Con tro toi 8 byte cua CAN frame (khong duoc NULL).
+ * @param  dlc            So byte hop le trong frame (1..8).
+ * @param  currentTimeMs  Thoi diem hien tai (de bat/reset timeout N_Cr).
  * @return ISOTP_OK, hoac ma loi tuong ung.
  */
-IsoTp_StatusType IsoTp_OnCanFrame(const uint8_t *frame, uint8_t dlc);
+IsoTp_StatusType IsoTp_OnCanFrame(const uint8_t *frame,
+                                  uint8_t        dlc,
+                                  uint32_t       currentTimeMs);
 
 /**
  * @brief  Ham chu ky, goi tu main loop de gui CF va xu ly timeout.

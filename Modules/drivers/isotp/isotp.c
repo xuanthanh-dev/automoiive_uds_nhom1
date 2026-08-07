@@ -18,6 +18,10 @@
  *--------------------------------------------------------------------------*/
 static IsoTp_ContextType isoTpContext;
 
+/* Thoi gian cua lan goi hien tai (set boi Send/OnCanFrame/MainFunction).
+   Cac ham Handle noi bo dung de set timer, khong phu thuoc thu tu goi. */
+static uint32_t isoTpCurrentTimeMs;
+
 /*----------------------------------------------------------------------------
  * Ham phu tro: ghi nhan loi (luu ma loi + tang bo dem)
  *--------------------------------------------------------------------------*/
@@ -121,8 +125,15 @@ static IsoTp_StatusType IsoTp_SendSingleFrame(const uint8_t *message,
             }
         }
 
-        isoTpContext.canSend(frame, ISOTP_CAN_FRAME_SIZE);
-        status = ISOTP_OK;
+        if (isoTpContext.canSend(frame, ISOTP_CAN_FRAME_SIZE) != 0u)
+        {
+            IsoTp_RecordError(ISOTP_ERR_SEND_FAILED);
+            status = ISOTP_ERROR_STATE;
+        }
+        else
+        {
+            status = ISOTP_OK;
+        }
     }
 
     return status;
@@ -153,8 +164,16 @@ static IsoTp_StatusType IsoTp_SendFirstFrame(void)
     }
 
     isoTpContext.tx.sentIndex = ISOTP_FF_FIRST_PAYLOAD;
-    isoTpContext.canSend(frame, ISOTP_CAN_FRAME_SIZE);
-    status = ISOTP_OK;
+
+    if (isoTpContext.canSend(frame, ISOTP_CAN_FRAME_SIZE) != 0u)
+    {
+        IsoTp_RecordError(ISOTP_ERR_SEND_FAILED);
+        status = ISOTP_ERROR_STATE;
+    }
+    else
+    {
+        status = ISOTP_OK;
+    }
 
     return status;
 }
@@ -208,8 +227,15 @@ static IsoTp_StatusType IsoTp_SendConsecutiveFrame(void)
     isoTpContext.tx.sequenceNumber =
         (uint8_t)((isoTpContext.tx.sequenceNumber + 1u) & ISOTP_PCI_VALUE_MASK);
 
-    isoTpContext.canSend(frame, ISOTP_CAN_FRAME_SIZE);
-    status = ISOTP_OK;
+    if (isoTpContext.canSend(frame, ISOTP_CAN_FRAME_SIZE) != 0u)
+    {
+        IsoTp_RecordError(ISOTP_ERR_SEND_FAILED);
+        status = ISOTP_ERROR_STATE;
+    }
+    else
+    {
+        status = ISOTP_OK;
+    }
 
     return status;
 }
@@ -266,11 +292,46 @@ static IsoTp_StatusType IsoTp_HandleReceivedSingleFrame(const uint8_t *frame)
  * @param  frame  Con tro 8 byte frame.
  * @return ISOTP_OK, hoac ma loi.
  */
-static IsoTp_StatusType IsoTp_HandleReceivedFirstFrame(const uint8_t *frame)
+/**
+ * @brief  Gui mot Flow Control frame (CTS - cho phep gui tiep).
+ * @details Tach rieng de code gon va de mo rong Block Size / STmin sau nay.
+ *          Hien tai Block Size = 0, STmin = 0 (gui het khong cho).
+ * @return ISOTP_OK neu gui thanh cong, ISOTP_ERROR_STATE neu canSend that bai.
+ */
+static IsoTp_StatusType IsoTp_SendFlowControl(void)
 {
     IsoTp_StatusType status;
     uint8_t          flowControlFrame[ISOTP_CAN_FRAME_SIZE];
     uint8_t          index;
+    uint8_t          sendResult;
+
+    flowControlFrame[0] =
+        (uint8_t)(ISOTP_PCI_FLOW_CONTROL | ISOTP_FC_CONTINUE_TO_SEND);
+    flowControlFrame[1] = 0x00u;  /* Block Size = 0 (gui het)         */
+    flowControlFrame[2] = 0x00u;  /* STmin = 0 (khong cho giua frame) */
+    for (index = 3u; index < ISOTP_CAN_FRAME_SIZE; index++)
+    {
+        flowControlFrame[index] = 0x00u;
+    }
+
+    sendResult = isoTpContext.canSend(flowControlFrame, ISOTP_CAN_FRAME_SIZE);
+
+    if (sendResult != 0u)
+    {
+        IsoTp_RecordError(ISOTP_ERR_SEND_FAILED);
+        status = ISOTP_ERROR_STATE;
+    }
+    else
+    {
+        status = ISOTP_OK;
+    }
+
+    return status;
+}
+
+static IsoTp_StatusType IsoTp_HandleReceivedFirstFrame(const uint8_t *frame)
+{
+    IsoTp_StatusType status;
 
     /* Ghep 12 bit do dai tu byte 0 va byte 1 */
     isoTpContext.rx.totalLength =
@@ -297,17 +358,11 @@ static IsoTp_StatusType IsoTp_HandleReceivedFirstFrame(const uint8_t *frame)
             isoTpContext.rx.sequenceNumber = 1u;
             isoTpContext.rx.state          = ISOTP_RX_RECEIVING_CF;
 
-            /* Gui Flow Control: cho phep gui tiep */
-            flowControlFrame[0] =
-                (uint8_t)(ISOTP_PCI_FLOW_CONTROL | ISOTP_FC_CONTINUE_TO_SEND);
-            flowControlFrame[1] = 0x00u;  /* Block Size = 0 */
-            flowControlFrame[2] = 0x00u;  /* STmin = 0      */
-            for (index = 3u; index < ISOTP_CAN_FRAME_SIZE; index++)
-            {
-                flowControlFrame[index] = 0x00u;
-            }
+            /* Bat dau dem timeout N_Cr cho Consecutive Frame */
+            isoTpContext.rx.timerStartMs = isoTpCurrentTimeMs;
 
-            isoTpContext.canSend(flowControlFrame, ISOTP_CAN_FRAME_SIZE);
+            /* Gui Flow Control cho phep gui tiep */
+            status = IsoTp_SendFlowControl();
         }
         else
         {
@@ -378,6 +433,9 @@ static IsoTp_StatusType IsoTp_HandleReceivedConsecutiveFrame(const uint8_t *fram
                 isoTpContext.rx.sequenceNumber =
                     (uint8_t)((isoTpContext.rx.sequenceNumber + 1u) &
                               ISOTP_PCI_VALUE_MASK);
+
+                /* Reset dong ho N_Cr sau moi CF hop le */
+                isoTpContext.rx.timerStartMs = isoTpCurrentTimeMs;
 
                 /* Da nhan du toan bo ban tin */
                 if (isoTpContext.rx.receivedIndex >= isoTpContext.rx.totalLength)
@@ -486,9 +544,10 @@ IsoTp_StatusType IsoTp_Init(IsoTp_CanSendType    canSendFunction,
         isoTpContext.rx.sequenceNumber = 0u;
         isoTpContext.rx.timerStartMs   = 0u;
 
-        isoTpContext.lastError     = ISOTP_ERR_NONE;
-        isoTpContext.errorCounter  = 0u;
-        isoTpContext.isInitialised = 1u;
+        isoTpContext.lastError       = ISOTP_ERR_NONE;
+        isoTpContext.errorCounter    = 0u;
+        isoTpCurrentTimeMs = 0u;
+        isoTpContext.isInitialised   = 1u;
 
         status = ISOTP_OK;
     }
@@ -499,9 +558,14 @@ IsoTp_StatusType IsoTp_Init(IsoTp_CanSendType    canSendFunction,
 /**
  * @brief  Gui mot ban tin qua ISO-TP. Xem mo ta trong isotp.h.
  */
-IsoTp_StatusType IsoTp_Send(const uint8_t *message, uint16_t length)
+IsoTp_StatusType IsoTp_Send(const uint8_t *message,
+                            uint16_t       length,
+                            uint32_t       currentTimeMs)
 {
     IsoTp_StatusType status;
+
+    /* Luu thoi gian cua lan goi nay de set timer WAIT_FC */
+    isoTpCurrentTimeMs = currentTimeMs;
 
     /* Kiem tra da khoi tao chua */
     if (isoTpContext.isInitialised == 0u)
@@ -551,6 +615,9 @@ IsoTp_StatusType IsoTp_Send(const uint8_t *message, uint16_t length)
             isoTpContext.tx.sequenceNumber = 1u;
             isoTpContext.tx.state          = ISOTP_TX_WAIT_FC;
 
+            /* Bat dau dem timeout N_Bs cho Flow Control */
+            isoTpContext.tx.timerStartMs = isoTpCurrentTimeMs;
+
             status = IsoTp_SendFirstFrame();
         }
         else
@@ -565,10 +632,15 @@ IsoTp_StatusType IsoTp_Send(const uint8_t *message, uint16_t length)
 /**
  * @brief  Xu ly mot CAN frame nhan duoc. Xem mo ta trong isotp.h.
  */
-IsoTp_StatusType IsoTp_OnCanFrame(const uint8_t *frame, uint8_t dlc)
+IsoTp_StatusType IsoTp_OnCanFrame(const uint8_t *frame,
+                                  uint8_t        dlc,
+                                  uint32_t       currentTimeMs)
 {
     IsoTp_StatusType status;
     uint8_t          frameType;
+
+    /* Luu thoi gian cua lan goi nay de handler set timer truc tiep */
+    isoTpCurrentTimeMs = currentTimeMs;
 
     /* Kiem tra da khoi tao chua */
     if (isoTpContext.isInitialised == 0u)
@@ -634,6 +706,9 @@ IsoTp_StatusType IsoTp_MainFunction(uint32_t currentTimeMs)
     else
     {
         status = ISOTP_OK;
+
+        /* Luu thoi gian de cac ham Handle set timer */
+        isoTpCurrentTimeMs = currentTimeMs;
 
         /* Neu dang gui CF thi gui frame tiep theo */
         if (isoTpContext.tx.state == ISOTP_TX_SENDING_CF)
