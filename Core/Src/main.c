@@ -19,13 +19,10 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-#include <string.h>
-#include "canif.h"
-#include "isotp_app.h"
-#include "uart_log.h"
 #include <stdio.h>
+#include <string.h>
+
+#include "Can_if.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,24 +46,16 @@ CAN_HandleTypeDef hcan;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-extern volatile uint32_t rxCount;
-extern volatile uint32_t rxGetOk;
-extern volatile uint32_t rxCbCalled;
-static uint8_t  testMessage[64];
-static uint32_t lastSendMs = 0u;
 
-/* Danh sach do dai can kiem thu */
-static const uint8_t testLengths[] = { 3u, 7u, 8u, 20u, 64u };
-#define TEST_CASE_COUNT   (sizeof(testLengths) / sizeof(testLengths[0]))
-
-static uint8_t testIndex = 0u;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_CAN_Init(void);
+void MX_CAN_Init(void);
 static void MX_USART1_UART_Init(void);
+static void blink_led(void);
+void uartlog(char *message);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -105,57 +94,32 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_CAN_Init();
+  CAN_IF_Init();
   MX_USART1_UART_Init();
+  blink_led();
   /* USER CODE BEGIN 2 */
-    if (CAN_IF_Init() != CANIF_OK)
-    {
-        uartlog("LOI: khoi tao CAN that bai\r\n");
-        Error_Handler();
-    }
-
-    IsoTpApp_Init();
-
-    {
-          uint8_t i;
-          for (i = 0u; i < 64u; i++)
-          {
-              testMessage[i] = (uint8_t)(0xA0u + i);
-          }
-    }
+  uint8_t TxData_RPM[8] = {0x03, 0x22, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00};
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-    while (1)
-      {
+  while (1)
+  {
+	  CAN_StatusTypeDef status;
+
+	  status = CAN_IF_Transmit(0x7E0, TxData_RPM, 8);
+
+	  if (status != OK)
+	  {
+	      printf("CAN TX error: %d\r\n", status);
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    IsoTpApp_MainFunction(HAL_GetTick());
-
-		if ((HAL_GetTick() - lastSendMs) >= 5000u)
-		{
-			lastSendMs = HAL_GetTick();
-
-			{
-				char    buf[64];
-				uint8_t len = testLengths[testIndex];
-
-				sprintf(buf, "\r\n===== Ca kiem thu %u/%u : %u byte =====\r\n",
-						(unsigned)(testIndex + 1u),
-						(unsigned)TEST_CASE_COUNT,
-						(unsigned)len);
-				uartlog(buf);
-
-				IsoTpApp_SendMessage(testMessage, (uint16_t)len, HAL_GetTick());
-			}
-
-			testIndex = (uint8_t)((testIndex + 1u) % TEST_CASE_COUNT);
-		}
+  }
   /* USER CODE END 3 */
 }
-}
+
 /**
   * @brief System Clock Configuration
   * @retval None
@@ -193,43 +157,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-}
-
-/**
-  * @brief CAN Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_CAN_Init(void)
-{
-
-  /* USER CODE BEGIN CAN_Init 0 */
-
-  /* USER CODE END CAN_Init 0 */
-
-  /* USER CODE BEGIN CAN_Init 1 */
-
-  /* USER CODE END CAN_Init 1 */
-  hcan.Instance = CAN1;
-  hcan.Init.Prescaler = 4;
-  hcan.Init.Mode = CAN_MODE_LOOPBACK;
-  hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan.Init.TimeSeg1 = CAN_BS1_15TQ;
-  hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
-  hcan.Init.TimeTriggeredMode = DISABLE;
-  hcan.Init.AutoBusOff = DISABLE;
-  hcan.Init.AutoWakeUp = DISABLE;
-  hcan.Init.AutoRetransmission = DISABLE;
-  hcan.Init.ReceiveFifoLocked = DISABLE;
-  hcan.Init.TransmitFifoPriority = DISABLE;
-  if (HAL_CAN_Init(&hcan) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN CAN_Init 2 */
-
-  /* USER CODE END CAN_Init 2 */
-
 }
 
 /**
@@ -272,41 +199,56 @@ static void MX_USART1_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
-
+	 GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : PC13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   /* USER CODE BEGIN MX_GPIO_Init_2 */
+   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);   // LED OFF
 
+    GPIO_InitStruct.Pin = GPIO_PIN_13;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET); // Khởi tạo mức 0 cho PA5
+      GPIO_InitStruct.Pin = GPIO_PIN_5;
+      GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;         // Output Push-Pull
+      GPIO_InitStruct.Pull = GPIO_NOPULL;
+      GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+      HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
   /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+#ifdef __GNUC__
+int __io_putchar(int ch)
+#else
+int fputc(int ch, FILE *f)
+#endif
+{
+    HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+    return ch;
+}
 void uartlog(char *message)
 {
-    HAL_UART_Transmit(&huart1, (uint8_t *)message,
-                      strlen(message), HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart1, (uint8_t *)message, strlen(message), HAL_MAX_DELAY);
+}
+void blink_led(void)
+{
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);   // Bật LED PA5 báo hiệu reset
+	HAL_Delay(2000);                                      // Giữ sáng 2 giây để dễ quan sát
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET); // Tắt LED PA5
 }
 /* USER CODE END 4 */
 
 /**
-  * @brief  This function is executed in case of error occurrence.
+  * @brief  This function isx` executed in case of error occurrence.
   * @retval None
   */
 void Error_Handler(void)

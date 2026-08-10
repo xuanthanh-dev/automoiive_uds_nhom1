@@ -33,9 +33,8 @@ void CAN_IF_Init(void) {
 	hcan.Init.AutoRetransmission = ENABLE;
 	hcan.Init.ReceiveFifoLocked = DISABLE;
 	hcan.Init.TransmitFifoPriority = DISABLE;
-	if (HAL_CAN_Init(&hcan) != HAL_OK) {
-		Error_Handler();
-	}
+	HAL_CAN_Init(&hcan);
+
 	/* USER CODE BEGIN CAN_Init 2 */
 	FilterConfig.FilterActivation = CAN_FILTER_ENABLE;
 	FilterConfig.FilterFIFOAssignment = CAN_FILTER_FIFO1; /* Sửa tên enum chuẩn HAL: CAN_FILTER_FIFO1 */
@@ -46,10 +45,7 @@ void CAN_IF_Init(void) {
 	FilterConfig.FilterMaskIdHigh = (0x000 << 5);
 	FilterConfig.FilterMaskIdLow = 0;
 	FilterConfig.FilterBank = 0;
-	if (HAL_CAN_ConfigFilter(&hcan, &FilterConfig) != HAL_OK) /* Sửa tên biến &sFilterConfig -> &FilterConfig */
-	{
-		Error_Handler();
-	}
+	HAL_CAN_ConfigFilter(&hcan, &FilterConfig);
 	/* USER CODE END CAN_Init 2 */
 	HAL_CAN_Start(&hcan);
 	HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO1_MSG_PENDING);
@@ -58,13 +54,39 @@ void CAN_IF_Init(void) {
 /**
  * @brief Hàm truyền dữ liệu CAN
  */
-HAL_StatusTypeDef CAN_IF_Transmit(uint16_t stdId, uint8_t *pData, uint8_t len) {
-	TxHeader.StdId = stdId;
-	TxHeader.IDE = CAN_ID_STD;
-	TxHeader.RTR = CAN_RTR_DATA;
-	TxHeader.DLC = len;
+CAN_StatusTypeDef CAN_IF_Transmit(uint16_t stdId, uint8_t *pData, uint8_t len)
+{
+	CAN_StatusTypeDef errorCode = OK;
+	HAL_StatusTypeDef halStatus = HAL_OK;
 
-	return HAL_CAN_AddTxMessage(&hcan, &TxHeader, pData, &TxMailbox);
+	if (stdId > 0x7FFU)
+	{
+		errorCode = ERROR_INVALID_ID;
+	}
+	if (pData == NULL)
+	{
+		errorCode = ERROR_NULL_POINTER;
+	}
+	if (len > 8 || len <= 0)
+	{
+		errorCode = ERROR_INVALID_LENGTH;
+	}
+
+	if (OK == errorCode)
+	{
+		TxHeader.StdId = stdId;
+		TxHeader.IDE = CAN_ID_STD;
+		TxHeader.RTR = CAN_RTR_DATA;
+		TxHeader.DLC = len;
+		
+		halStatus = HAL_CAN_AddTxMessage(&hcan, &TxHeader, pData, &TxMailbox);
+		if (halStatus != HAL_OK)
+		{
+			errorCode = ERROR_TRANSMIT;
+		}
+	}
+
+	return errorCode;
 }
 /**
  * @brief Hàm xử lý lỗi khi truyền dữ liệu CAN
