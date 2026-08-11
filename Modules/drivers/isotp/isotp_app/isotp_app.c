@@ -1,42 +1,77 @@
 /**
  * @file    isotp_app.c
- * @brief   Lop keo noi ISO-TP voi CanIf.
+ * @brief   Lop keo giua ISO-TP va tang giao tiep CAN.
  *
- * @note    NGUYEN TAC 1 - Khong in log trong ngat.
- *          Hai ham duoi day CO THE chay trong ngat CAN:
- *              CAN_IF_OnFrameReceived      (CanIf goi tu ngat)
- *              IsoTpApp_CanSendWrapper     (khi ISO-TP gui Flow Control)
- *              IsoTpApp_OnMessageReceived  (khi ghep xong ban tin)
- *          Chung chi cat du lieu vao hang doi. Viec in do MainFunction lam.
+ * @note    NGUYEN TAC MOT - ngat lam cang it viec cang tot.
+ *          CAN_IF_OnFrameReceived chay trong ngat. No chi chep khung vao
+ *          hang doi roi thoat. Moi viec xu ly, ke ca khung tra loi ma ISO-TP
+ *          co the phai gui, deu dien ra sau do trong ham chu ky. Khong tach
+ *          nhu vay thi mot khung nhan duoc co the keo theo viec gui khung
+ *          ngay trong ngat, va mot dong log viet o do se chan du lau de mat
+ *          cac khung phia sau.
  *
- * @note    NGUYEN TAC 2 - Khong sua CanIf.
- *          Chieu gui dung CAN_IF_Transmit san co.
- *          Chieu nhan dung CAN_IF_OnFrameReceived - ham yeu khai bao trong
- *          CanIf, file nay dinh nghia de lay quyen. CanIf khong can biet
- *          ai dang dung no.
+ * @note    NGUYEN TAC HAI - khong sua tang giao tiep CAN.
+ *          Chieu gui dung CAN_IF_Transmit san co. Chieu nhan dung
+ *          CAN_IF_OnFrameReceived - ham yeu khai bao trong tang giao tiep
+ *          CAN, file nay dinh nghia lai de lay quyen. Nho vay tang giao tiep
+ *          CAN khong bao gio can biet tang nao dang nam tren no.
+ *
+ * @note    Hai hang doi duoi day do ngat ghi va vong lap chinh doc. Chi so
+ *          dau va duoi deu la mot byte, moi chi so chi mot ben ghi, nen tren
+ *          kien truc nay khong can khoa. Neu chi so vuot qua mot byte thi
+ *          phai them doan chan ngat.
  */
 
 #include "isotp_app.h"
 #include "isotp.h"
 #include "Can_if.h"     /* CAN_IF_Transmit, CAN_StatusTypeDef */
 #include "uart_log.h"
-#include <stdio.h>      /* sprintf */
+#include <stdio.h>      /* snprintf */
+#include <stdint.h>
 
 /*----------------------------------------------------------------------------
- * Cau hinh
+ * Cau hinh luc bien dich
  *--------------------------------------------------------------------------*/
-#define ISOTP_APP_ECHO_ENABLE   (1)    /* 1 = gui nguoc ban tin nhan duoc */
-#define ISOTP_APP_LOG_FRAMES    (1)    /* 1 = in tung khung gui di        */
+
+/** Gui nguoc lai moi ban tin nhan duoc, de chung minh ca hai chieu deu chay. */
+#define ISOTP_APP_ECHO_ENABLE   (1)
+
+/** In tung khung gui di. Dat bang khong cho ban chay nhanh va it log. */
+#define ISOTP_APP_LOG_FRAMES    (1)
+
+/** Kich thuoc bo dem ghep mot dong log. */
 #define ISOTP_APP_LOG_SIZE      (200)
+
+/** So khung gui di duoc phep cho in. */
 #define ISOTP_APP_TXLOG_DEPTH   (12u)
+
+/** So khung nhan duoc phep cho xu ly. */
+#define ISOTP_APP_RXQUEUE_DEPTH (16u)
+
+/** Ban tin dai nhat lop nay xu ly. */
 #define ISOTP_APP_MSG_MAX       (64u)
 
 /*----------------------------------------------------------------------------
- * Hang doi log khung gui di - ngat GHI, MainFunction DOC
+ * Hang doi nhan - ngat ghi vao, ham chu ky lay ra
  *--------------------------------------------------------------------------*/
 typedef struct
 {
-    uint8_t data[8];
+    uint8_t  data[ISOTP_CAN_FRAME_SIZE];
+    uint8_t  dlc;
+    uint32_t timestampMs;   /**< Khung den luc nao, giu de tinh han cho */
+} IsoTpApp_RxEntryType;
+
+static volatile IsoTpApp_RxEntryType isoTpAppRxQueue[ISOTP_APP_RXQUEUE_DEPTH];
+static volatile uint8_t              isoTpAppRxHead = 0u;  /* vong lap chinh doc */
+static volatile uint8_t              isoTpAppRxTail = 0u;  /* ngat ghi */
+static volatile uint32_t             isoTpAppRxDropped = 0u;
+
+/*----------------------------------------------------------------------------
+ * Hang doi log khung gui - dien o cho gui, lay ra o cho in
+ *--------------------------------------------------------------------------*/
+typedef struct
+{
+    uint8_t data[ISOTP_CAN_FRAME_SIZE];
     uint8_t dlc;
 } IsoTpApp_TxLogType;
 
@@ -45,14 +80,14 @@ static volatile uint8_t            isoTpAppTxLogHead = 0u;
 static volatile uint8_t            isoTpAppTxLogTail = 0u;
 
 /*----------------------------------------------------------------------------
- * Cho log ban tin da ghep
+ * Ban tin da ghep xong dang cho in
  *--------------------------------------------------------------------------*/
 static uint8_t           isoTpAppRxLog[ISOTP_APP_MSG_MAX];
 static volatile uint16_t isoTpAppRxLogLength  = 0u;
 static volatile uint8_t  isoTpAppRxLogPending = 0u;
 
 /*----------------------------------------------------------------------------
- * Cho gui echo
+ * Ban tin dang cho gui nguoc lai
  *--------------------------------------------------------------------------*/
 static uint8_t           isoTpAppEchoBuffer[ISOTP_APP_MSG_MAX];
 static volatile uint16_t isoTpAppEchoLength  = 0u;
@@ -68,29 +103,50 @@ static volatile uint8_t isoTpAppSendFailed    = 0u;
 static char             isoTpAppLogBuffer[ISOTP_APP_LOG_SIZE];
 
 /*============================================================================
- * Ham phu tro - chi chay trong MainFunction, duoc phep cham
+ * Ham phu tro chi goi tu vong lap chinh, nen duoc phep cham
  *==========================================================================*/
 
 /**
- * @brief  Ghep cac byte thanh chuoi hex vao bo dem log.
+ * @brief  Ghep byte vao bo dem log duoi dang thap luc phan.
+ * @param  offset  Bat dau ghi tu dau.
+ * @param  data    Du lieu can ghi.
+ * @param  length  So byte.
+ * @return Vi tri trong ke tiep trong bo dem.
+ *
+ * @note   Dung snprintf va dung lai truoc khi het bo dem, nen khung dai bi cat
+ *         bot chu khong tran ra ngoai.
  */
 static int IsoTpApp_AppendHex(int offset, const uint8_t *data, uint16_t length)
 {
     uint16_t index;
     int      position;
+    int      written;
+    int      remaining;
 
     position = offset;
 
     for (index = 0u; index < length; index++)
     {
-        if (position < (ISOTP_APP_LOG_SIZE - 5))
+        remaining = ISOTP_APP_LOG_SIZE - position;
+
+        if (remaining > 6)
         {
-            position += sprintf(&isoTpAppLogBuffer[position], " %02X",
-                                (unsigned)data[index]);
+            written = snprintf(&isoTpAppLogBuffer[position], (size_t)remaining,
+                               " %02X", (unsigned)data[index]);
+            if (written > 0)
+            {
+                position += written;
+            }
+            else
+            {
+                break;
+            }
         }
         else
         {
-            position += sprintf(&isoTpAppLogBuffer[position], "...");
+            (void)snprintf(&isoTpAppLogBuffer[position], (size_t)remaining,
+                           "...");
+            position = ISOTP_APP_LOG_SIZE - 1;
             break;
         }
     }
@@ -99,40 +155,41 @@ static int IsoTpApp_AppendHex(int offset, const uint8_t *data, uint16_t length)
 }
 
 /**
- * @brief  Xa hang doi log khung gui di ra UART.
- * @note   Chi goi tu MainFunction, khong bao gio goi tu ngat.
+ * @brief  In cac khung da gui ke tu chu ky truoc.
  */
 static void IsoTpApp_FlushTxLog(void)
 {
 #if (ISOTP_APP_LOG_FRAMES == 1)
-    uint8_t frame[8];
+    uint8_t frame[ISOTP_CAN_FRAME_SIZE];
     uint8_t dlc;
     uint8_t index;
     int     position;
 
     while (isoTpAppTxLogHead != isoTpAppTxLogTail)
     {
+        /* Sao ra truoc de ben ghi van tiep tuc dien duoc vao hang doi */
         dlc = isoTpAppTxLog[isoTpAppTxLogHead].dlc;
-        for (index = 0u; index < 8u; index++)
+        for (index = 0u; index < ISOTP_CAN_FRAME_SIZE; index++)
         {
             frame[index] = isoTpAppTxLog[isoTpAppTxLogHead].data[index];
         }
         isoTpAppTxLogHead =
             (uint8_t)((isoTpAppTxLogHead + 1u) % ISOTP_APP_TXLOG_DEPTH);
 
-        position = sprintf(isoTpAppLogBuffer, "  [TX 0x%03X]",
-                           (unsigned)ISOTP_APP_ID_TX);
+        position = snprintf(isoTpAppLogBuffer, sizeof(isoTpAppLogBuffer),
+                            "  [TX 0x%03X]", (unsigned)ISOTP_APP_ID_TX);
         position = IsoTpApp_AppendHex(position, frame, (uint16_t)dlc);
-        (void)sprintf(&isoTpAppLogBuffer[position], "\r\n");
+        (void)snprintf(&isoTpAppLogBuffer[position],
+                       sizeof(isoTpAppLogBuffer) - (size_t)position, "\r\n");
         uartlog(isoTpAppLogBuffer);
     }
 #else
-    /* Tat log khung */
+    /* Da tat log khung luc bien dich */
 #endif
 }
 
 /**
- * @brief  In ban tin da ghep va cac canh bao khac ra UART.
+ * @brief  In ban tin da ghep xong va cac canh bao dang cho.
  */
 static void IsoTpApp_FlushMessageLog(void)
 {
@@ -140,28 +197,30 @@ static void IsoTpApp_FlushMessageLog(void)
 
     if (isoTpAppRxLogPending != 0u)
     {
-        position = sprintf(isoTpAppLogBuffer, "\r\n>>> GHEP XONG %u byte:",
-                           (unsigned)isoTpAppRxLogLength);
+        position = snprintf(isoTpAppLogBuffer, sizeof(isoTpAppLogBuffer),
+                            "\r\n>>> GHEP XONG %u byte:",
+                            (unsigned)isoTpAppRxLogLength);
         position = IsoTpApp_AppendHex(position, isoTpAppRxLog,
                                       isoTpAppRxLogLength);
-        (void)sprintf(&isoTpAppLogBuffer[position], "\r\n");
+        (void)snprintf(&isoTpAppLogBuffer[position],
+                       sizeof(isoTpAppLogBuffer) - (size_t)position, "\r\n");
         uartlog(isoTpAppLogBuffer);
 
         isoTpAppRxLogPending = 0u;
     }
     else
     {
-        /* Khong co ban tin moi */
+        /* Khong co gi moi de bao */
     }
 
     if (isoTpAppEchoTooLong != 0u)
     {
-        uartlog(">>> Ban tin qua dai, khong echo\r\n");
+        uartlog(">>> Ban tin qua dai, khong gui nguoc lai\r\n");
         isoTpAppEchoTooLong = 0u;
     }
     else
     {
-        /* Khong co canh bao */
+        /* Khong co canh bao nao */
     }
 
     if (isoTpAppSendFailed != 0u)
@@ -171,19 +230,60 @@ static void IsoTpApp_FlushMessageLog(void)
     }
     else
     {
-        /* Khong co loi gui */
+        /* Khong co loi gui nao */
+    }
+
+    if (isoTpAppRxDropped != 0u)
+    {
+        (void)snprintf(isoTpAppLogBuffer, sizeof(isoTpAppLogBuffer),
+                       "  [CANH BAO] Mat %lu khung, hang doi da day\r\n",
+                       (unsigned long)isoTpAppRxDropped);
+        uartlog(isoTpAppLogBuffer);
+        isoTpAppRxDropped = 0u;
+    }
+    else
+    {
+        /* Khong mat khung nao */
+    }
+}
+
+/**
+ * @brief  Dua lan luot cac khung trong hang doi len ISO-TP.
+ *
+ * @note   Chay trong vong lap chinh, nen ISO-TP tra loi bang khung dieu khien
+ *         luong tu day la an toan.
+ */
+static void IsoTpApp_DrainRxQueue(void)
+{
+    uint8_t  frame[ISOTP_CAN_FRAME_SIZE];
+    uint8_t  dlc;
+    uint32_t timestampMs;
+    uint8_t  index;
+
+    while (isoTpAppRxHead != isoTpAppRxTail)
+    {
+        dlc         = isoTpAppRxQueue[isoTpAppRxHead].dlc;
+        timestampMs = isoTpAppRxQueue[isoTpAppRxHead].timestampMs;
+        for (index = 0u; index < ISOTP_CAN_FRAME_SIZE; index++)
+        {
+            frame[index] = isoTpAppRxQueue[isoTpAppRxHead].data[index];
+        }
+        isoTpAppRxHead =
+            (uint8_t)((isoTpAppRxHead + 1u) % ISOTP_APP_RXQUEUE_DEPTH);
+
+        (void)IsoTp_OnCanFrame(frame, dlc, timestampMs);
     }
 }
 
 /*============================================================================
- * Ham callback - CO THE chay trong ngat, tuyet doi khong in log
+ * Cac ham trao cho ISO-TP goi lai
  *==========================================================================*/
 
 /**
- * @brief  Gui khung xuong CanIf kem CAN ID cua minh.
- * @param  frame  Con tro 8 byte cua khung CAN.
+ * @brief  Dat mot khung len bus kem ma dinh danh cua lop nay.
+ * @param  frame  Tam byte can gui.
  * @param  dlc    So byte hop le.
- * @return 0 neu gui thanh cong, 1 neu that bai.
+ * @return Bang khong khi khung duoc nhan, bang mot khi bi tu choi.
  */
 static uint8_t IsoTpApp_CanSendWrapper(const uint8_t *frame, uint8_t dlc)
 {
@@ -195,11 +295,10 @@ static uint8_t IsoTpApp_CanSendWrapper(const uint8_t *frame, uint8_t dlc)
     {
         result = 1u;
     }
-    /* CanIf nhan uint8_t* (khong const) nen phai ep kieu.
-       CanIf chi doc, khong sua, nen ep kieu o day an toan. */
+    /* Tang giao tiep CAN nhan con tro khong const du chi doc, nen ep kieu
+       o day la an toan. */
     else if (CAN_IF_Transmit(ISOTP_APP_ID_TX, (uint8_t *)frame, dlc) != OK)
     {
-        /* Chi dat co, MainFunction se in thong bao */
         isoTpAppSendFailed = 1u;
         result = 1u;
     }
@@ -209,7 +308,7 @@ static uint8_t IsoTpApp_CanSendWrapper(const uint8_t *frame, uint8_t dlc)
 
         if (nextTail != isoTpAppTxLogHead)
         {
-            for (index = 0u; index < 8u; index++)
+            for (index = 0u; index < ISOTP_CAN_FRAME_SIZE; index++)
             {
                 isoTpAppTxLog[isoTpAppTxLogTail].data[index] =
                     (index < dlc) ? frame[index] : 0u;
@@ -219,7 +318,8 @@ static uint8_t IsoTpApp_CanSendWrapper(const uint8_t *frame, uint8_t dlc)
         }
         else
         {
-            /* Hang doi day - bo log, KHONG anh huong viec gui */
+            /* Hang doi log day. Bo mot dong log thi vo hai, bo chinh khung thi
+               khong, nen viec gui da duoc thuc hien o tren. */
         }
 
         result = 0u;
@@ -229,8 +329,13 @@ static uint8_t IsoTpApp_CanSendWrapper(const uint8_t *frame, uint8_t dlc)
 }
 
 /**
- * @brief  Nhan ban tin da ghep day du tu ISO-TP.
- * @note   CO THE chay trong ngat. Chi cat du lieu, khong in, khong gui.
+ * @brief  Nhan ban tin ma ISO-TP vua ghep xong.
+ * @param  message  Ban tin day du.
+ * @param  length   So byte cua no.
+ *
+ * @note   Chi ghi lai ban tin. Gui nguoc ngay tai day se goi long vao ISO-TP
+ *         trong luc no con dang xu ly ban tin nay, lam hong trang thai, nen
+ *         viec gui duoc hoan lai cho vong lap chinh.
  */
 static void IsoTpApp_OnMessageReceived(const uint8_t *message, uint16_t length)
 {
@@ -238,7 +343,7 @@ static void IsoTpApp_OnMessageReceived(const uint8_t *message, uint16_t length)
 
     if (message == 0)
     {
-        /* Khong co du lieu */
+        /* Nothing to record */
     }
     else if (length > ISOTP_APP_MSG_MAX)
     {
@@ -256,8 +361,6 @@ static void IsoTpApp_OnMessageReceived(const uint8_t *message, uint16_t length)
         isoTpAppRxLogPending = 1u;
 
 #if (ISOTP_APP_ECHO_ENABLE == 1)
-        /* KHONG goi IsoTp_Send o day: ISO-TP dang xu ly do, goi long vao
-           chinh no se lam hong trang thai. Chi dat co. */
         for (index = 0u; index < length; index++)
         {
             isoTpAppEchoBuffer[index] = message[index];
@@ -268,31 +371,59 @@ static void IsoTpApp_OnMessageReceived(const uint8_t *message, uint16_t length)
     }
 }
 
+/*============================================================================
+ * Diem vao tu ngat
+ *==========================================================================*/
+
 /**
- * @brief  Nhan khung tu CanIf. Dinh nghia de lay quyen ham yeu trong CanIf.
- * @param  stdId  CAN ID cua khung.
+ * @brief  Nhan mot khung tu tang giao tiep CAN.
+ * @param  stdId  Ma dinh danh cua khung.
  * @param  data   Du lieu khung.
- * @param  dlc    So byte.
+ * @param  dlc    So byte hop le.
  *
- * @note   CHAY TRONG NGAT. Chi loc ID va day len ISO-TP.
+ * @note   CHAY TRONG NGAT. No loc theo ma dinh danh va chep khung vao hang doi,
+ *         khong lam gi hon. Moi viec khac cho vong lap chinh. Dinh nghia ham
+ *         nay se lay quyen tu ban mac dinh danh dau yeu trong tang giao tiep
+ *         CAN.
  */
 void CAN_IF_OnFrameReceived(uint32_t stdId, const uint8_t *data, uint8_t dlc)
 {
+    uint8_t nextTail;
+    uint8_t index;
+
     if (isoTpAppInitialised == 0u)
     {
-        /* Chua khoi tao - bo qua */
+        /* Chua san sang */
     }
     else if (data == 0)
     {
-        /* Du lieu rong - bo qua */
+        /* Khong co gi de lay */
     }
     else if (stdId != ISOTP_APP_ID_RX)
     {
-        /* Khong phai ID cua minh - bo qua */
+        /* Khung cua module khac */
     }
     else
     {
-        (void)IsoTp_OnCanFrame(data, dlc, HAL_GetTick());
+        nextTail = (uint8_t)((isoTpAppRxTail + 1u) % ISOTP_APP_RXQUEUE_DEPTH);
+
+        if (nextTail != isoTpAppRxHead)
+        {
+            for (index = 0u; index < ISOTP_CAN_FRAME_SIZE; index++)
+            {
+                isoTpAppRxQueue[isoTpAppRxTail].data[index] =
+                    (index < dlc) ? data[index] : 0u;
+            }
+            isoTpAppRxQueue[isoTpAppRxTail].dlc         = dlc;
+            isoTpAppRxQueue[isoTpAppRxTail].timestampMs = HAL_GetTick();
+            isoTpAppRxTail = nextTail;
+        }
+        else
+        {
+            /* Hang doi day: vong lap chinh khong theo kip. Dem so khung mat de
+               con bao ra, thay vi de troi qua khong ai biet. */
+            isoTpAppRxDropped++;
+        }
     }
 }
 
@@ -315,6 +446,9 @@ IsoTpApp_StatusType IsoTpApp_Init(void)
     else
     {
         isoTpAppReceivedCount = 0u;
+        isoTpAppRxHead        = 0u;
+        isoTpAppRxTail        = 0u;
+        isoTpAppRxDropped     = 0u;
         isoTpAppTxLogHead     = 0u;
         isoTpAppTxLogTail     = 0u;
         isoTpAppRxLogLength   = 0u;
@@ -325,10 +459,10 @@ IsoTpApp_StatusType IsoTpApp_Init(void)
         isoTpAppSendFailed    = 0u;
         isoTpAppInitialised   = 1u;
 
-        (void)sprintf(isoTpAppLogBuffer,
-                      "\r\n=== ISO-TP san sang ===\r\n"
-                      "Nhan ID 0x%03X, gui ID 0x%03X\r\n\r\n",
-                      (unsigned)ISOTP_APP_ID_RX, (unsigned)ISOTP_APP_ID_TX);
+        (void)snprintf(isoTpAppLogBuffer, sizeof(isoTpAppLogBuffer),
+                       "\r\n=== ISO-TP san sang ===\r\n"
+                       "Nhan ID 0x%03X, gui ID 0x%03X\r\n\r\n",
+                       (unsigned)ISOTP_APP_ID_RX, (unsigned)ISOTP_APP_ID_TX);
         uartlog(isoTpAppLogBuffer);
 
         status = ISOTP_APP_OK;
@@ -337,9 +471,6 @@ IsoTpApp_StatusType IsoTpApp_Init(void)
     return status;
 }
 
-/**
- * @brief  Ham chu ky. Chay trong vong lap chinh nen duoc phep in log.
- */
 IsoTpApp_StatusType IsoTpApp_MainFunction(uint32_t currentTimeMs)
 {
     IsoTpApp_StatusType status;
@@ -351,6 +482,10 @@ IsoTpApp_StatusType IsoTpApp_MainFunction(uint32_t currentTimeMs)
     }
     else
     {
+        /* Cac khung ngat da bat duoc se duoc xu ly o day, noi ma ISO-TP tra
+           loi bang khung dieu khien luong la an toan. */
+        IsoTpApp_DrainRxQueue();
+
         (void)IsoTp_MainFunction(currentTimeMs);
 
         if (isoTpAppEchoPending != 0u)
@@ -361,7 +496,7 @@ IsoTpApp_StatusType IsoTpApp_MainFunction(uint32_t currentTimeMs)
         }
         else
         {
-            /* Khong co gi de echo */
+            /* Khong co gi de gui nguoc lai */
         }
 
         IsoTpApp_FlushMessageLog();
@@ -390,8 +525,9 @@ IsoTpApp_StatusType IsoTpApp_SendMessage(const uint8_t *message,
     }
     else
     {
-        (void)sprintf(isoTpAppLogBuffer, "\r\n<<< GUI %u byte qua ISO-TP\r\n",
-                      (unsigned)length);
+        (void)snprintf(isoTpAppLogBuffer, sizeof(isoTpAppLogBuffer),
+                       "\r\n<<< GUI %u byte qua ISO-TP\r\n",
+                       (unsigned)length);
         uartlog(isoTpAppLogBuffer);
 
         isoTpStatus = IsoTp_Send(message, length, currentTimeMs);
