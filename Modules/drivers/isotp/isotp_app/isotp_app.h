@@ -17,7 +17,6 @@
 #define ISOTP_APP_H
 
 #include <stdint.h>
-#include "isotp.h"
 
 /*----------------------------------------------------------------------------
  * Ma dinh danh chan doan.

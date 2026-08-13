@@ -27,17 +27,26 @@
 #include "Can_if.h"     /* CAN_IF_Transmit, CAN_StatusTypeDef */
 #include "uart_log.h"
 #include <stdio.h>      /* snprintf */
-#include <stdint.h>
 
 /*----------------------------------------------------------------------------
  * Cau hinh luc bien dich
  *--------------------------------------------------------------------------*/
 
-/** Gui nguoc lai moi ban tin nhan duoc, de chung minh ca hai chieu deu chay. */
+/*
+ * Gui nguoc lai moi ban tin nhan duoc, de chung minh ca hai chieu deu chay.
+ *
+ * QUAN TRONG: chi duoc bat o MOT board. Neu ca hai cung bat, ban tin se doi
+ * qua doi lai khong dut. Board chu dong gui phai dat gia tri nay bang khong,
+ * khai bao trong muc bien tien xu ly cua project.
+ */
+#ifndef ISOTP_APP_ECHO_ENABLE
 #define ISOTP_APP_ECHO_ENABLE   (1)
+#endif
 
 /** In tung khung gui di. Dat bang khong cho ban chay nhanh va it log. */
+#ifndef ISOTP_APP_LOG_FRAMES
 #define ISOTP_APP_LOG_FRAMES    (1)
+#endif
 
 /** Kich thuoc bo dem ghep mot dong log. */
 #define ISOTP_APP_LOG_SIZE      (200)

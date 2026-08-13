@@ -36,6 +36,25 @@
 /** So byte du lieu cua khung noi tiep. */
 #define ISOTP_CF_MAX_PAYLOAD          (7u)
 
+/*
+ * Do dai toi thieu cua tung loai khung.
+ * Nguoi goi bao dlc la so byte hop le, nen module chi duoc doc trong pham vi
+ * do. Neu khong kiem tra, mot khung khai dlc bang mot van co the bi dua vao
+ * ham xu ly khung dau - ham do doc toi byte thu tam.
+ */
+
+/** Khung don: mot byte dieu khien va it nhat mot byte du lieu. */
+#define ISOTP_MIN_DLC_SINGLE_FRAME    (2u)
+
+/** Khung dau: hai byte dieu khien va sau byte du lieu. */
+#define ISOTP_MIN_DLC_FIRST_FRAME     (8u)
+
+/** Khung noi tiep: mot byte dieu khien va it nhat mot byte du lieu. */
+#define ISOTP_MIN_DLC_CONSECUTIVE     (2u)
+
+/** Khung dieu khien luong: lenh, kich thuoc khoi, thoi gian nghi. */
+#define ISOTP_MIN_DLC_FLOW_CONTROL    (3u)
+
 
 /*----------------------------------------------------------------------------
  * Trang thai noi bo - co y de ngoai header cong khai, nen nguoi dung khong
@@ -241,15 +260,21 @@ static IsoTp_StatusType IsoTp_SendFirstFrame(void)
         frame[index + 2u] = isoTpContext.tx.buffer[index];
     }
 
-    isoTpContext.tx.sentIndex = ISOTP_FF_FIRST_PAYLOAD;
-
+    /*
+     * Cung ly do nhu khung noi tiep: chi ghi nhan da gui sau khi tang duoi
+     * nhan khung. Khi that bai con phai dua chieu gui ve nghi, neu khong
+     * module se ket o trang thai cho xin phep cho mot khung chua ra bus.
+     */
     if (isoTpContext.canSend(frame, ISOTP_CAN_FRAME_SIZE) != 0u)
     {
         IsoTp_RecordError(ISOTP_ERR_SEND_FAILED);
+        isoTpContext.tx.sentIndex = 0u;
+        isoTpContext.tx.state     = ISOTP_TX_IDLE;
         status = ISOTP_ERROR_STATE;
     }
     else
     {
+        isoTpContext.tx.sentIndex = ISOTP_FF_FIRST_PAYLOAD;
         status = ISOTP_OK;
     }
 
@@ -299,12 +324,11 @@ static IsoTp_StatusType IsoTp_SendConsecutiveFrame(void)
         }
     }
 
-    isoTpContext.tx.sentIndex += bytesToSend;
-
-    /* SN cuon vong 0..15 */
-    isoTpContext.tx.sequenceNumber =
-        (uint8_t)((isoTpContext.tx.sequenceNumber + 1u) & ISOTP_PCI_VALUE_MASK);
-
+    /*
+     * Chi cap nhat trang thai SAU khi tang duoi da nhan khung.
+     * Neu cap nhat truoc roi gui that bai, module se tuong la da gui duoc
+     * trong khi ben kia chua nhan gi - ban tin mat ma khong ai biet.
+     */
     if (isoTpContext.canSend(frame, ISOTP_CAN_FRAME_SIZE) != 0u)
     {
         IsoTp_RecordError(ISOTP_ERR_SEND_FAILED);
@@ -312,6 +336,13 @@ static IsoTp_StatusType IsoTp_SendConsecutiveFrame(void)
     }
     else
     {
+        isoTpContext.tx.sentIndex += bytesToSend;
+
+        /* So thu tu cuon vong tu khong den muoi lam */
+        isoTpContext.tx.sequenceNumber =
+            (uint8_t)((isoTpContext.tx.sequenceNumber + 1u)
+                      & ISOTP_PCI_VALUE_MASK);
+
         status = ISOTP_OK;
     }
 
@@ -327,16 +358,28 @@ static IsoTp_StatusType IsoTp_SendConsecutiveFrame(void)
  * @param  frame  Con tro 8 byte frame (da kiem tra NULL o ham goi).
  * @return ISOTP_OK, hoac ma loi.
  */
-static IsoTp_StatusType IsoTp_HandleReceivedSingleFrame(const uint8_t *frame)
+static IsoTp_StatusType IsoTp_HandleReceivedSingleFrame(const uint8_t *frame, uint8_t dlc)
 {
     IsoTp_StatusType status;
     uint8_t          payloadLength;
 
     payloadLength = (uint8_t)(frame[0] & ISOTP_PCI_VALUE_MASK);
 
-    /* Kiem tra do dai hop le: 1..7 */
-    if ((payloadLength == 0u) || (payloadLength > ISOTP_SF_MAX_PAYLOAD))
+    if (dlc < ISOTP_MIN_DLC_SINGLE_FRAME)
     {
+        /* Khung qua ngan de chua noi mot byte du lieu */
+        IsoTp_RecordError(ISOTP_ERR_INVALID_FRAME);
+        status = ISOTP_ERROR_FRAME;
+    }
+    /* Kiem tra do dai hop le: 1..7 */
+    else if ((payloadLength == 0u) || (payloadLength > ISOTP_SF_MAX_PAYLOAD))
+    {
+        IsoTp_RecordError(ISOTP_ERR_SF_BAD_LENGTH);
+        status = ISOTP_ERROR_SIZE;
+    }
+    else if ((uint16_t)(payloadLength + 1u) > (uint16_t)dlc)
+    {
+        /* Khung khai nhieu byte du lieu hon so byte hop le no mang theo */
         IsoTp_RecordError(ISOTP_ERR_SF_BAD_LENGTH);
         status = ISOTP_ERROR_SIZE;
     }
@@ -408,17 +451,31 @@ static IsoTp_StatusType IsoTp_SendFlowControl(void)
     return status;
 }
 
-static IsoTp_StatusType IsoTp_HandleReceivedFirstFrame(const uint8_t *frame)
+static IsoTp_StatusType IsoTp_HandleReceivedFirstFrame(const uint8_t *frame, uint8_t dlc)
 {
     IsoTp_StatusType status;
 
+    if (dlc < ISOTP_MIN_DLC_FIRST_FRAME)
+    {
+        /* Khung dau phai du tam byte: hai byte dieu khien va sau byte du lieu */
+        IsoTp_RecordError(ISOTP_ERR_INVALID_FRAME);
+        status = ISOTP_ERROR_FRAME;
+    }
+    else
+    {
     /* Ghep 12 bit do dai tu byte 0 va byte 1 */
     isoTpContext.rx.totalLength =
         (uint16_t)(((uint16_t)(frame[0] & ISOTP_PCI_VALUE_MASK) << 8u) |
                    (uint16_t)frame[1]);
 
-    /* Kiem tra do dai vuot buffer */
-    if (isoTpContext.rx.totalLength > ISOTP_MAX_MESSAGE_SIZE)
+    /*
+     * Do dai phai lon hon suc chua cua mot khung don. Ban tin bay byte tro
+     * xuong bat buoc phai gui bang khung don, nen khung dau khai do dai nho
+     * hon la sai chuan. Khong chan thi module se chep sau byte roi thay da
+     * du, goi len tang tren voi ban tin sai.
+     */
+    if ((isoTpContext.rx.totalLength <= ISOTP_SINGLE_FRAME_MAX) ||
+        (isoTpContext.rx.totalLength > ISOTP_MAX_MESSAGE_SIZE))
     {
         IsoTp_RecordError(ISOTP_ERR_LENGTH_EXCEEDED);
         isoTpContext.rx.state = ISOTP_RX_IDLE;
@@ -448,6 +505,7 @@ static IsoTp_StatusType IsoTp_HandleReceivedFirstFrame(const uint8_t *frame)
             isoTpContext.rx.state = ISOTP_RX_IDLE;
         }
     }
+    }
 
     return status;
 }
@@ -461,15 +519,21 @@ static IsoTp_StatusType IsoTp_HandleReceivedFirstFrame(const uint8_t *frame)
  * @param  frame  Con tro 8 byte frame.
  * @return ISOTP_OK, hoac ma loi.
  */
-static IsoTp_StatusType IsoTp_HandleReceivedConsecutiveFrame(const uint8_t *frame)
+static IsoTp_StatusType IsoTp_HandleReceivedConsecutiveFrame(const uint8_t *frame, uint8_t dlc)
 {
     IsoTp_StatusType status;
     uint8_t          receivedSequenceNumber;
     uint16_t         remaining;
     uint16_t         bytesToCopy;
 
+    if (dlc < ISOTP_MIN_DLC_CONSECUTIVE)
+    {
+        /* Khung qua ngan de chua noi mot byte du lieu */
+        IsoTp_RecordError(ISOTP_ERR_INVALID_FRAME);
+        status = ISOTP_ERROR_FRAME;
+    }
     /* Chi co y nghia khi dang ghep mot ban tin */
-    if (isoTpContext.rx.state != ISOTP_RX_RECEIVING_CF)
+    else if (isoTpContext.rx.state != ISOTP_RX_RECEIVING_CF)
     {
         IsoTp_RecordError(ISOTP_ERR_UNEXPECTED_CF);
         status = ISOTP_ERROR_STATE;
@@ -547,13 +611,19 @@ static IsoTp_StatusType IsoTp_HandleReceivedConsecutiveFrame(const uint8_t *fram
  * @param  frame  Con tro 8 byte frame.
  * @return ISOTP_OK, hoac ma loi.
  */
-static IsoTp_StatusType IsoTp_HandleReceivedFlowControl(const uint8_t *frame)
+static IsoTp_StatusType IsoTp_HandleReceivedFlowControl(const uint8_t *frame, uint8_t dlc)
 {
     IsoTp_StatusType status;
     uint8_t          flowStatus;
 
+    if (dlc < ISOTP_MIN_DLC_FLOW_CONTROL)
+    {
+        /* Phai du ba byte: lenh, kich thuoc khoi, thoi gian nghi */
+        IsoTp_RecordError(ISOTP_ERR_INVALID_FRAME);
+        status = ISOTP_ERROR_FRAME;
+    }
     /* Chi xu ly khi dang cho Flow Control */
-    if (isoTpContext.tx.state != ISOTP_TX_WAIT_FC)
+    else if (isoTpContext.tx.state != ISOTP_TX_WAIT_FC)
     {
         IsoTp_RecordError(ISOTP_ERR_UNEXPECTED_CF);
         status = ISOTP_ERROR_STATE;
@@ -745,19 +815,19 @@ IsoTp_StatusType IsoTp_OnCanFrame(const uint8_t *frame,
 
         if (frameType == ISOTP_PCI_SINGLE_FRAME)
         {
-            status = IsoTp_HandleReceivedSingleFrame(frame);
+            status = IsoTp_HandleReceivedSingleFrame(frame, dlc);
         }
         else if (frameType == ISOTP_PCI_FIRST_FRAME)
         {
-            status = IsoTp_HandleReceivedFirstFrame(frame);
+            status = IsoTp_HandleReceivedFirstFrame(frame, dlc);
         }
         else if (frameType == ISOTP_PCI_CONSECUTIVE_FRAME)
         {
-            status = IsoTp_HandleReceivedConsecutiveFrame(frame);
+            status = IsoTp_HandleReceivedConsecutiveFrame(frame, dlc);
         }
         else if (frameType == ISOTP_PCI_FLOW_CONTROL)
         {
-            status = IsoTp_HandleReceivedFlowControl(frame);
+            status = IsoTp_HandleReceivedFlowControl(frame, dlc);
         }
         else
         {
