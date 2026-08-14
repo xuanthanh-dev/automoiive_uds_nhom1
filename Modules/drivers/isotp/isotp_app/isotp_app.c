@@ -20,7 +20,7 @@
 #include "isotp_app.h"
 #include "isotp.h"
 #include "Can_if.h"     /* CAN_IF_Transmit, dang ky ham nhan */
-#include "uart_log.h"   /* uartlog */
+//#include "uart_log.h"   /* uartlog */
 #include <stdio.h>      /* sprintf */
 
 /*----------------------------------------------------------------------------
@@ -205,7 +205,7 @@ static uint8_t IsoTpApp_CanSendWrapper(const uint8_t *frame, uint8_t dlc)
     {
         result = 1u;
     }
-    else if (CAN_IF_Transmit(ISOTP_APP_ID_TX, frame, dlc) != CANIF_OK)
+    else if (CAN_IF_Transmit(ISOTP_APP_ID_TX, frame, dlc) != OK)
     {
         /* Chi dat co, MainFunction se in thong bao */
         isoTpAppSendFailed = 1u;
@@ -328,7 +328,7 @@ IsoTpApp_StatusType IsoTpApp_Init(void)
     {
         status = ISOTP_APP_ERROR_STATE;
     }
-    else if (CAN_IF_RegisterRxCallback(IsoTpApp_OnCanRx) != CANIF_OK)
+    else if (CAN_IF_RegisterRxCallback(IsoTpApp_OnCanRx) !=  OK)
     {
         status = ISOTP_APP_ERROR_STATE;
     }
