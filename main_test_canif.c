@@ -21,10 +21,7 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <stdio.h>
-#include <string.h>
 
-#include "Can_if.h"
 #include "Can_if.h"
 /* USER CODE END Includes */
 
@@ -57,9 +54,6 @@
 CAN_HandleTypeDef hcan;
 
 UART_HandleTypeDef huart1;
-CAN_HandleTypeDef hcan;
-
-UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 
@@ -81,7 +75,7 @@ static void MX_USART1_UART_Init(void);
 static void blink_led(void);
 void uartlog(char *message);
 
-/* System Test for CAN_IF*/
+/* System Test */
 static void SystemTest_RunAll(void);
 static void SystemTest_CANIF_Init(void);
 static void SystemTest_TX_8Bytes(void);
@@ -144,7 +138,7 @@ int main(void) {
 	/*
 	 * Chạy System Test một lần sau khi MCU khởi động.
 	 */
-	//SystemTest_RunAll();
+	SystemTest_RunAll();
 
 	/* USER CODE END 2 */
 
@@ -378,8 +372,7 @@ static void SystemTest_RunAll(void) {
  * @brief SYS-CANIF-001
  * CANIF Init
  */
-static void SystemTest_CANIF_Init(void)
-{
+static void SystemTest_CANIF_Init(void) {
 	HAL_CAN_StateTypeDef state;
 
 	state = HAL_CAN_GetState(&hcan);
@@ -400,8 +393,7 @@ static void SystemTest_CANIF_Init(void)
  * @brief SYS-CANIF-002
  * TX 8 bytes
  */
-static void SystemTest_TX_8Bytes(void)
-{
+static void SystemTest_TX_8Bytes(void) {
 	uint8_t data[8] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
 
 	CAN_StatusTypeDef status;
@@ -432,8 +424,7 @@ static void SystemTest_TX_8Bytes(void)
  * @brief SYS-CANIF-003
  * TX DLC 0
  */
-static void SystemTest_TX_DLC0(void)
-{
+static void SystemTest_TX_DLC0(void) {
 	uint8_t data = 0x00;
 
 	CAN_StatusTypeDef status;
