@@ -18,4 +18,5 @@ uint32_t CAN_IF_HandleTxError(void);
 CAN_StatusTypeDef CAN_IF_GetReceivedFrame(uint32_t *stdId, uint8_t *data,uint8_t *dlc);
 CAN_StatusTypeDef CAN_IF_ProcessRxInterrupt(void);
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan);
+void CAN_IF_DeInit(void);
 #endif /* INC_CAN_IF_H_ */
