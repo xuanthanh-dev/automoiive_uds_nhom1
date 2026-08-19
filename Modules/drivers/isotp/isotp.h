@@ -1,17 +1,18 @@
 /**
  * @file    isotp.h
- * @brief   Giao dien cong khai cua tang van chuyen ISO 15765-2.
+ * @brief   ISO-TP (ISO 15765-2) transport layer tren CAN.
+ * @details Chia nho payload UDS lon hon 7 byte thanh nhieu CAN frame,
+ *          va ghep lai o phia nhan.
+ *          Bon loai frame: Single, First, Consecutive, Flow Control.
+ *          Issue: #19 (Single Frame), #21 (Multi-frame FF/CF/FC)
+ *          Requirement: SWR-ISO-TP-001, SWR-ISO-TP-002, SYS-003
  *
- * @details Chia ban tin dai hon bay byte thanh nhieu khung CAN, va ghep lai
- *          o phia nhan.
+ * @note    Coding standard:
+ *          - Moi ham chi co mot lenh return (single-exit)
+ *          - Moi tham so dau vao deu duoc kiem tra
+ *          - Moi nhanh if deu co else
+ *          - Loi duoc luu vao bo dem de chan doan
  *
- * @note    Header nay la ban giao uoc. No chi lo ra thu ma nguoi dung can:
- *          ma trang thai, ma loi, hai kieu ham noi tang, va sau ham cong khai.
- *          Toan bo trang thai noi bo nam trong isotp.c, ben ngoai khong voi
- *          toi duoc, nen khong the phu thuoc vao chi tiet cai dat.
- *
- * @note    Module nay khong phu thuoc phan cung. No chi include stdint.h,
- *          nho vay kiem thu duoc tren may tinh ma khong can board.
  */
 
 #ifndef ISOTP_H
@@ -20,163 +21,217 @@
 #include <stdint.h>
 
 /*----------------------------------------------------------------------------
- * Cac gioi han kich thuoc - dung khi thiet ke ca kiem thu bien
+ * Hang so giao thuc ISO-TP
  *--------------------------------------------------------------------------*/
-
-/** Ban tin dai nhat module chuyen duoc, tinh bang byte. */
-#define ISOTP_MAX_MESSAGE_SIZE      (64u)
-
-/** So byte lon nhat con vua mot khung don. */
-#define ISOTP_SINGLE_FRAME_MAX      (7u)
-
-/** So byte du lieu ma khung dau mang theo. */
-#define ISOTP_FF_FIRST_PAYLOAD      (6u)
-
-/** Do dai mot khung CAN, tinh bang byte. */
-#define ISOTP_CAN_FRAME_SIZE        (8u)
-
-/** Han cho khung dieu khien luong sau khi gui khung dau, don vi mili giay. */
-#define ISOTP_TIMEOUT_N_BS_MS       (1000u)
-
-/** Han cho khung noi tiep ke tiep khi dang nhan, don vi mili giay. */
-#define ISOTP_TIMEOUT_N_CR_MS       (1000u)
+#define ISOTP_CAN_FRAME_SIZE        (8u)   /* Mot CAN frame co 8 byte         */
+#define ISOTP_SF_MAX_PAYLOAD        (7u)   /* Single Frame chua toi da 7 byte */
+#define ISOTP_FF_FIRST_PAYLOAD      (6u)   /* First Frame chua 6 byte dau     */
+#define ISOTP_CF_MAX_PAYLOAD        (7u)   /* Consecutive Frame chua 7 byte   */
+#define ISOTP_MAX_MESSAGE_SIZE      (64u)  /* Do dai payload lon nhat ho tro  */
 
 /*----------------------------------------------------------------------------
- * Byte dieu khien - bon loai khung
+ * Ma loai frame (4 bit cao cua byte dau tien - PCI type)
  *--------------------------------------------------------------------------*/
-#define ISOTP_PCI_SINGLE_FRAME      (0x00u)  /**< Ca ban tin trong mot khung */
-#define ISOTP_PCI_FIRST_FRAME       (0x10u)  /**< Manh dau cua ban tin dai   */
-#define ISOTP_PCI_CONSECUTIVE       (0x20u)  /**< Cac manh tiep theo         */
-#define ISOTP_PCI_FLOW_CONTROL      (0x30u)  /**< Ben nhan cho phep gui tiep */
+#define ISOTP_PCI_SINGLE_FRAME      (0x00u)
+#define ISOTP_PCI_FIRST_FRAME       (0x10u)
+#define ISOTP_PCI_CONSECUTIVE_FRAME (0x20u)
+#define ISOTP_PCI_FLOW_CONTROL      (0x30u)
+
+#define ISOTP_PCI_TYPE_MASK         (0xF0u)  /* Mask lay 4 bit loai frame */
+#define ISOTP_PCI_VALUE_MASK        (0x0Fu)  /* Mask lay 4 bit gia tri    */
 
 /*----------------------------------------------------------------------------
- * Lenh trong khung dieu khien luong, nam o bon bit thap cua byte dau
+ * Ma Flow Control (byte thu 2 cua Flow Control frame)
  *--------------------------------------------------------------------------*/
-#define ISOTP_FC_CONTINUE_TO_SEND   (0x00u)  /**< Cu gui tiep              */
-#define ISOTP_FC_WAIT               (0x01u)  /**< Cho them mot lat          */
-#define ISOTP_FC_OVERFLOW           (0x02u)  /**< Ben nhan khong chua noi   */
+#define ISOTP_FC_CONTINUE_TO_SEND   (0x00u)
+#define ISOTP_FC_WAIT               (0x01u)
+#define ISOTP_FC_OVERFLOW           (0x02u)
 
 /*----------------------------------------------------------------------------
- * Ma trang thai tra ve
+ * STmin encoding: values 0x00-0x7F are milliseconds (0..127 ms).
+ * Values 0xF1-0xF9 are 100us-900us (treated as 1 ms here for simplicity).
+ * ISO 15765-2 §6.5.5.5
+ *--------------------------------------------------------------------------*/
+#define ISOTP_STMIN_MAX_MS          (127u)  /* Max STmin in ms range      */
+#define ISOTP_STMIN_US_MIN          (0xF1u) /* Start of 100us range       */
+#define ISOTP_STMIN_US_MAX          (0xF9u) /* End of 100us range         */
+
+/*----------------------------------------------------------------------------
+ * Timeout (don vi ms)
+ *--------------------------------------------------------------------------*/
+#define ISOTP_TIMEOUT_N_BS_MS       (1000u)  /* Cho Flow Control          */
+#define ISOTP_TIMEOUT_N_CR_MS       (1000u)  /* Cho Consecutive Frame tiep */
+
+/*----------------------------------------------------------------------------
+ * Ma trang thai tra ve cua ham public
  *--------------------------------------------------------------------------*/
 typedef enum
 {
-    ISOTP_OK             = 0u,  /**< Thanh cong                             */
-    ISOTP_BUSY           = 1u,  /**< Dang ban voi ban tin khac              */
-    ISOTP_ERROR_NULL     = 2u,  /**< Co tham so con tro rong                */
-    ISOTP_ERROR_SIZE     = 3u,  /**< Do dai bang khong hoac vuot gioi han   */
-    ISOTP_ERROR_STATE    = 4u,  /**< Chua khoi tao, hoac trang thai khong hop */
-    ISOTP_ERROR_FRAME    = 5u,  /**< Khung khong dung dinh dang             */
-    ISOTP_ERROR_SEQUENCE = 6u   /**< Khung noi tiep den sai thu tu          */
+    ISOTP_OK             = 0u,  /* Thao tac thanh cong        */
+    ISOTP_BUSY           = 1u,  /* Dang ban truyen/nhan       */
+    ISOTP_ERROR_NULL     = 2u,  /* Con tro NULL               */
+    ISOTP_ERROR_SIZE     = 3u,  /* Payload vuot qua gioi han  */
+    ISOTP_ERROR_TIMEOUT  = 4u,  /* Het thoi gian cho          */
+    ISOTP_ERROR_STATE    = 5u,  /* Sai trang thai             */
+    ISOTP_ERROR_SEQUENCE = 6u,  /* Sai so thu tu (SN)         */
+    ISOTP_ERROR_FRAME    = 7u   /* Loai frame khong hop le    */
 } IsoTp_StatusType;
 
 /*----------------------------------------------------------------------------
- * Ma loi chi tiet, doc bang IsoTp_GetLastError
+ * Ma loi noi bo, luu vao bo dem de chan doan (yeu cau: luu moi loi)
  *--------------------------------------------------------------------------*/
 typedef enum
 {
-    ISOTP_ERR_NONE              = 0u,   /**< Chua ghi nhan loi nao        */
-    ISOTP_ERR_NULL_POINTER      = 1u,   /**< Nhan duoc con tro rong       */
-    ISOTP_ERR_ZERO_LENGTH       = 2u,   /**< Do dai bang khong            */
-    ISOTP_ERR_LENGTH_EXCEEDED   = 3u,   /**< Vuot qua gioi han kich thuoc */
-    ISOTP_ERR_INVALID_FRAME     = 4u,   /**< Khong nhan ra loai khung     */
-    ISOTP_ERR_SF_BAD_LENGTH     = 5u,   /**< Khung don khai do dai sai    */
-    ISOTP_ERR_SEQUENCE_MISMATCH = 6u,   /**< Da mat mot khung o giua      */
-    ISOTP_ERR_UNEXPECTED_CF     = 7u,   /**< Khung den sai thoi diem      */
-    ISOTP_ERR_FC_OVERFLOW       = 8u,   /**< Ben kia bao khong chua noi   */
-    ISOTP_ERR_TX_TIMEOUT        = 9u,   /**< Cho xin phep qua lau         */
-    ISOTP_ERR_RX_TIMEOUT        = 10u,  /**< Cho manh ke tiep qua lau     */
-    ISOTP_ERR_NOT_INITIALISED   = 11u,  /**< Dung truoc khi khoi tao      */
-    ISOTP_ERR_SEND_FAILED       = 12u   /**< Tang duoi tu choi khung      */
+    ISOTP_ERR_NONE              = 0u,
+    ISOTP_ERR_NULL_POINTER      = 1u,   /* Ham nhan con tro NULL          */
+    ISOTP_ERR_ZERO_LENGTH       = 2u,   /* Do dai bang 0                  */
+    ISOTP_ERR_LENGTH_EXCEEDED   = 3u,   /* Do dai vuot buffer             */
+    ISOTP_ERR_INVALID_FRAME     = 4u,   /* Byte PCI khong thuoc 4 loai    */
+    ISOTP_ERR_SF_BAD_LENGTH     = 5u,   /* Single Frame do dai sai        */
+    ISOTP_ERR_SEQUENCE_MISMATCH = 6u,   /* Consecutive Frame sai SN       */
+    ISOTP_ERR_UNEXPECTED_CF     = 7u,   /* Nhan CF khi khong o trang thai */
+    ISOTP_ERR_FC_OVERFLOW       = 8u,   /* Phia nhan bao tran             */
+    ISOTP_ERR_TX_TIMEOUT        = 9u,   /* Het gio cho Flow Control       */
+    ISOTP_ERR_RX_TIMEOUT        = 10u,  /* Het gio cho Consecutive Frame  */
+    ISOTP_ERR_NOT_INITIALISED   = 11u,  /* Chua goi IsoTp_Init            */
+    ISOTP_ERR_SEND_FAILED       = 12u,  /* canSend bao gui that bai       */
+    ISOTP_ERR_UNEXPECTED_FC     = 13u   /* Nhan FC khi khong o trang thai WAIT_FC */
 } IsoTp_ErrorCodeType;
 
 /*----------------------------------------------------------------------------
- * Hai kieu ham noi module nay voi cac tang xung quanh
+ * Kieu ham callback
  *--------------------------------------------------------------------------*/
 
+/** Ham goi len khi nhan xong ban tin day du. */
+typedef void (*IsoTp_RxCallbackType)(const uint8_t *message, uint16_t length);
+
 /**
- * @brief  Dua mot khung CAN xuong tang duoi.
- * @param  frame  Tam byte can dat len bus.
- * @param  dlc    So byte hop le.
- * @return Bang khong neu khung duoc nhan, khac khong neu bi tu choi.
- *
- * @note   Nguoi goi cung cap ham nay, nho vay ISO-TP khong can biet ben duoi
- *         la driver CAN nao, cung khong can biet dung ma dinh danh gi.
+ * @brief  Kieu ham gui frame xuong CanIf.
+ * @return 0 neu gui thanh cong, khac 0 neu that bai.
  */
 typedef uint8_t (*IsoTp_CanSendType)(const uint8_t *frame, uint8_t dlc);
 
-/**
- * @brief  Bao len tang tren khi da ghep xong mot ban tin.
- * @param  message  Ban tin day du.
- * @param  length   So byte cua no.
- */
-typedef void (*IsoTp_RxCallbackType)(const uint8_t *message, uint16_t length);
+/*----------------------------------------------------------------------------
+ * Trang thai may truyen (TX)
+ *--------------------------------------------------------------------------*/
+typedef enum
+{
+    ISOTP_TX_IDLE       = 0u,   /* Khong truyen                     */
+    ISOTP_TX_WAIT_FC    = 1u,   /* Da gui FF, dang cho Flow Control */
+    ISOTP_TX_SENDING_CF = 2u    /* Dang gui cac Consecutive Frame   */
+} IsoTp_TxStateType;
 
 /*----------------------------------------------------------------------------
- * Giao dien cong khai
+ * Trang thai may nhan (RX)
+ *--------------------------------------------------------------------------*/
+typedef enum
+{
+    ISOTP_RX_IDLE         = 0u,  /* Khong nhan                       */
+    ISOTP_RX_RECEIVING_CF = 1u   /* Da nhan FF, dang cho Consecutive */
+} IsoTp_RxStateType;
+
+/*----------------------------------------------------------------------------
+ * Khoi du lieu phia truyen (TX) - gom chung trong mot struct
+ *--------------------------------------------------------------------------*/
+typedef struct
+{
+    IsoTp_TxStateType state;                          /* Trang thai may truyen        */
+    uint8_t           buffer[ISOTP_MAX_MESSAGE_SIZE]; /* Du lieu dang gui             */
+    uint16_t          totalLength;                    /* Tong so byte can gui         */
+    uint16_t          sentIndex;                      /* So byte da gui               */
+    uint8_t           sequenceNumber;                 /* SN cua CF tiep theo          */
+    uint32_t          timerStartMs;                   /* Moc thoi gian cho FC (N_Bs)  */
+    uint8_t           blockSize;                      /* BS tu FC: 0 = gui het        */
+    uint8_t           blockCounter;                   /* So CF da gui trong block nay */
+    uint8_t           stMinMs;                        /* STmin (ms) tu FC             */
+    uint32_t          stMinTimerStartMs;              /* Moc thoi gian cho STmin      */
+} IsoTp_TxContextType;
+
+/*----------------------------------------------------------------------------
+ * Khoi du lieu phia nhan (RX) - gom chung trong mot struct
+ *--------------------------------------------------------------------------*/
+typedef struct
+{
+    IsoTp_RxStateType state;                          /* Trang thai may nhan    */
+    uint8_t           buffer[ISOTP_MAX_MESSAGE_SIZE]; /* Du lieu dang ghep      */
+    uint16_t          totalLength;                    /* Tong so byte se nhan   */
+    uint16_t          receivedIndex;                  /* So byte da nhan        */
+    uint8_t           sequenceNumber;                 /* SN mong doi tiep theo  */
+    uint32_t          timerStartMs;                   /* Moc thoi gian cho CF   */
+} IsoTp_RxContextType;
+
+/*----------------------------------------------------------------------------
+ * Khoi du lieu toan cuc cua module - gom tat ca vao mot struct
+ *--------------------------------------------------------------------------*/
+typedef struct
+{
+    uint8_t              isInitialised;   /* 1 sau khi IsoTp_Init thanh cong */
+    IsoTp_CanSendType    canSend;         /* Ham gui frame xuong CanIf       */
+    IsoTp_RxCallbackType rxCallback;      /* Ham bao len tang tren           */
+    IsoTp_TxContextType  tx;              /* Ngu canh truyen                 */
+    IsoTp_RxContextType  rx;              /* Ngu canh nhan                   */
+    IsoTp_ErrorCodeType  lastError;       /* Loi gan nhat (chan doan)        */
+    uint32_t             errorCounter;    /* Tong so lan gap loi             */
+} IsoTp_ContextType;
+
+/*----------------------------------------------------------------------------
+ * Public API
  *--------------------------------------------------------------------------*/
 
 /**
- * @brief  Chuan bi module de dung.
- * @param  canSendFunction  Ham dat khung len bus.
- * @param  rxCallback       Ham nhan ban tin da ghep xong.
- * @return ISOTP_OK neu thanh cong, ISOTP_ERROR_NULL neu mot tham so bi rong.
- *
- * @post   Ca chieu gui va chieu nhan deu ve trang thai nghi, moi bo dem ve
- *         khong. Goi lai ham nay la cach an toan de dat lai module.
+ * @brief  Khoi tao tang ISO-TP ve trang thai Idle.
+ * @param  canSendFunction  Ham gui CAN frame xuong CanIf (khong duoc NULL).
+ * @param  rxCallback       Ham goi len khi nhan xong (khong duoc NULL).
+ * @return ISOTP_OK neu thanh cong, ISOTP_ERROR_NULL neu tham so NULL.
  */
 IsoTp_StatusType IsoTp_Init(IsoTp_CanSendType    canSendFunction,
                             IsoTp_RxCallbackType rxCallback);
 
 /**
- * @brief  Gui mot ban tin, tu chia khung khi can.
- * @param  message        Du lieu can gui.
- * @param  length         So byte, tu mot den ISOTP_MAX_MESSAGE_SIZE.
- * @param  currentTimeMs  Thoi diem hien tai, dung de bat dau dem han cho.
- * @return ISOTP_OK khi da nhan viec. Voi ban tin dai, dieu nay nghia la khung
- *         dau da ra ngoai, phan con lai duoc gui dan trong ham chu ky.
- *         ISOTP_BUSY neu ban tin truoc con dang gui do.
+ * @brief  Dat lai trang thai TX va RX ve Idle ma khong mat callback.
+ * @details Dung khi phien UDS bi huy giua chung (vi du: tester ngat ket noi).
+ *          Khong can goi lai IsoTp_Init().
+ */
+void IsoTp_Reset(void);
+
+/**
+ * @brief  Gui mot ban tin qua ISO-TP.
+ * @param  message        Con tro toi du lieu can gui (khong duoc NULL).
+ * @param  length         So byte cua du lieu (1..ISOTP_MAX_MESSAGE_SIZE).
+ * @param  currentTimeMs  Thoi diem hien tai (de bat timeout N_Bs).
+ * @return ISOTP_OK, hoac ma loi tuong ung.
  */
 IsoTp_StatusType IsoTp_Send(const uint8_t *message,
                             uint16_t       length,
                             uint32_t       currentTimeMs);
 
 /**
- * @brief  Xu ly mot khung CAN vua nhan duoc.
- * @param  frame          Tam byte nhan duoc.
- * @param  dlc            So byte hop le, tu mot den tam.
- * @param  currentTimeMs  Thoi diem hien tai.
- * @return ISOTP_OK khi da xu ly, nguoc lai la ly do khong xu ly duoc.
- *
- * @note   Loai khung doc tu bon bit cao cua byte dau, roi khung duoc chuyen
- *         cho ham xu ly tuong ung.
+ * @brief  Xu ly mot CAN frame nhan duoc tu tang duoi.
+ * @param  frame          Con tro toi 8 byte cua CAN frame (khong duoc NULL).
+ * @param  dlc            So byte hop le trong frame (1..8).
+ * @param  currentTimeMs  Thoi diem hien tai (de bat/reset timeout N_Cr).
+ * @return ISOTP_OK, hoac ma loi tuong ung.
  */
 IsoTp_StatusType IsoTp_OnCanFrame(const uint8_t *frame,
                                   uint8_t        dlc,
                                   uint32_t       currentTimeMs);
 
 /**
- * @brief  Ham chu ky, goi deu dan tu vong lap chinh.
- * @param  currentTimeMs  Thoi diem hien tai.
- * @return ISOTP_OK khi chay xong mot chu ky.
- *
- * @note   Gui khung noi tiep ke tiep khi den luot, va bo cuoc voi ban tin da
- *         qua han cho, nho vay module khong bao gio bi ket.
- *
- * @note   Vong lap chinh khong duoc phep bi chan, neu khong cac khung con lai
- *         cua ban tin dai se khong bao gio duoc gui.
+ * @brief  Ham chu ky, goi tu main loop de gui CF va xu ly timeout.
+ * @param  currentTimeMs  Thoi diem hien tai (HAL_GetTick).
+ * @return ISOTP_OK, hoac ma loi tuong ung.
  */
 IsoTp_StatusType IsoTp_MainFunction(uint32_t currentTimeMs);
 
 /**
- * @brief  Doc ma loi gan nhat.
- * @return Mot gia tri trong IsoTp_ErrorCodeType. Doc khong lam xoa ma loi.
+ * @brief  Lay ma loi noi bo gan nhat (phuc vu chan doan).
+ * @return Ma loi trong IsoTp_ErrorCodeType.
  */
 IsoTp_ErrorCodeType IsoTp_GetLastError(void);
 
 /**
- * @brief  Doc so lan gap loi tu luc khoi tao.
- * @return So lan, dem tu khong.
+ * @brief  Lay tong so lan gap loi ke tu khi khoi tao.
+ * @return So dem loi.
  */
 uint32_t IsoTp_GetErrorCounter(void);
 
