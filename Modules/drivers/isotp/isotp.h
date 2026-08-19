@@ -12,6 +12,7 @@
  *          - Moi tham so dau vao deu duoc kiem tra
  *          - Moi nhanh if deu co else
  *          - Loi duoc luu vao bo dem de chan doan
+ *
  */
 
 #ifndef ISOTP_H
@@ -47,6 +48,15 @@
 #define ISOTP_FC_OVERFLOW           (0x02u)
 
 /*----------------------------------------------------------------------------
+ * STmin encoding: values 0x00-0x7F are milliseconds (0..127 ms).
+ * Values 0xF1-0xF9 are 100us-900us (treated as 1 ms here for simplicity).
+ * ISO 15765-2 §6.5.5.5
+ *--------------------------------------------------------------------------*/
+#define ISOTP_STMIN_MAX_MS          (127u)  /* Max STmin in ms range      */
+#define ISOTP_STMIN_US_MIN          (0xF1u) /* Start of 100us range       */
+#define ISOTP_STMIN_US_MAX          (0xF9u) /* End of 100us range         */
+
+/*----------------------------------------------------------------------------
  * Timeout (don vi ms)
  *--------------------------------------------------------------------------*/
 #define ISOTP_TIMEOUT_N_BS_MS       (1000u)  /* Cho Flow Control          */
@@ -57,14 +67,14 @@
  *--------------------------------------------------------------------------*/
 typedef enum
 {
-    ISOTP_OK            = 0u,   /* Thao tac thanh cong        */
-    ISOTP_BUSY          = 1u,   /* Dang ban truyen/nhan       */
-    ISOTP_ERROR_NULL    = 2u,   /* Con tro NULL               */
-    ISOTP_ERROR_SIZE    = 3u,   /* Payload vuot qua gioi han  */
-    ISOTP_ERROR_TIMEOUT = 4u,   /* Het thoi gian cho          */
-    ISOTP_ERROR_STATE   = 5u,   /* Sai trang thai             */
+    ISOTP_OK             = 0u,  /* Thao tac thanh cong        */
+    ISOTP_BUSY           = 1u,  /* Dang ban truyen/nhan       */
+    ISOTP_ERROR_NULL     = 2u,  /* Con tro NULL               */
+    ISOTP_ERROR_SIZE     = 3u,  /* Payload vuot qua gioi han  */
+    ISOTP_ERROR_TIMEOUT  = 4u,  /* Het thoi gian cho          */
+    ISOTP_ERROR_STATE    = 5u,  /* Sai trang thai             */
     ISOTP_ERROR_SEQUENCE = 6u,  /* Sai so thu tu (SN)         */
-    ISOTP_ERROR_FRAME   = 7u    /* Loai frame khong hop le    */
+    ISOTP_ERROR_FRAME    = 7u   /* Loai frame khong hop le    */
 } IsoTp_StatusType;
 
 /*----------------------------------------------------------------------------
@@ -84,7 +94,8 @@ typedef enum
     ISOTP_ERR_TX_TIMEOUT        = 9u,   /* Het gio cho Flow Control       */
     ISOTP_ERR_RX_TIMEOUT        = 10u,  /* Het gio cho Consecutive Frame  */
     ISOTP_ERR_NOT_INITIALISED   = 11u,  /* Chua goi IsoTp_Init            */
-    ISOTP_ERR_SEND_FAILED       = 12u   /* canSend bao gui that bai       */
+    ISOTP_ERR_SEND_FAILED       = 12u,  /* canSend bao gui that bai       */
+    ISOTP_ERR_UNEXPECTED_FC     = 13u   /* Nhan FC khi khong o trang thai WAIT_FC */
 } IsoTp_ErrorCodeType;
 
 /*----------------------------------------------------------------------------
@@ -94,7 +105,6 @@ typedef enum
 /** Ham goi len khi nhan xong ban tin day du. */
 typedef void (*IsoTp_RxCallbackType)(const uint8_t *message, uint16_t length);
 
-/** Ham gui mot CAN frame xuong tang duoi (CanIf). */
 /**
  * @brief  Kieu ham gui frame xuong CanIf.
  * @return 0 neu gui thanh cong, khac 0 neu that bai.
@@ -116,7 +126,7 @@ typedef enum
  *--------------------------------------------------------------------------*/
 typedef enum
 {
-    ISOTP_RX_IDLE         = 0u,  /* Khong nhan                      */
+    ISOTP_RX_IDLE         = 0u,  /* Khong nhan                       */
     ISOTP_RX_RECEIVING_CF = 1u   /* Da nhan FF, dang cho Consecutive */
 } IsoTp_RxStateType;
 
@@ -125,12 +135,16 @@ typedef enum
  *--------------------------------------------------------------------------*/
 typedef struct
 {
-    IsoTp_TxStateType state;                       /* Trang thai may truyen  */
-    uint8_t           buffer[ISOTP_MAX_MESSAGE_SIZE]; /* Du lieu dang gui    */
-    uint16_t          totalLength;                 /* Tong so byte can gui   */
-    uint16_t          sentIndex;                   /* So byte da gui         */
-    uint8_t           sequenceNumber;              /* SN cua CF tiep theo    */
-    uint32_t          timerStartMs;                /* Moc thoi gian cho FC   */
+    IsoTp_TxStateType state;                          /* Trang thai may truyen        */
+    uint8_t           buffer[ISOTP_MAX_MESSAGE_SIZE]; /* Du lieu dang gui             */
+    uint16_t          totalLength;                    /* Tong so byte can gui         */
+    uint16_t          sentIndex;                      /* So byte da gui               */
+    uint8_t           sequenceNumber;                 /* SN cua CF tiep theo          */
+    uint32_t          timerStartMs;                   /* Moc thoi gian cho FC (N_Bs)  */
+    uint8_t           blockSize;                      /* BS tu FC: 0 = gui het        */
+    uint8_t           blockCounter;                   /* So CF da gui trong block nay */
+    uint8_t           stMinMs;                        /* STmin (ms) tu FC             */
+    uint32_t          stMinTimerStartMs;              /* Moc thoi gian cho STmin      */
 } IsoTp_TxContextType;
 
 /*----------------------------------------------------------------------------
@@ -138,12 +152,12 @@ typedef struct
  *--------------------------------------------------------------------------*/
 typedef struct
 {
-    IsoTp_RxStateType state;                       /* Trang thai may nhan    */
-    uint8_t           buffer[ISOTP_MAX_MESSAGE_SIZE]; /* Du lieu dang ghep   */
-    uint16_t          totalLength;                 /* Tong so byte se nhan   */
-    uint16_t          receivedIndex;               /* So byte da nhan        */
-    uint8_t           sequenceNumber;              /* SN mong doi tiep theo  */
-    uint32_t          timerStartMs;                /* Moc thoi gian cho CF   */
+    IsoTp_RxStateType state;                          /* Trang thai may nhan    */
+    uint8_t           buffer[ISOTP_MAX_MESSAGE_SIZE]; /* Du lieu dang ghep      */
+    uint16_t          totalLength;                    /* Tong so byte se nhan   */
+    uint16_t          receivedIndex;                  /* So byte da nhan        */
+    uint8_t           sequenceNumber;                 /* SN mong doi tiep theo  */
+    uint32_t          timerStartMs;                   /* Moc thoi gian cho CF   */
 } IsoTp_RxContextType;
 
 /*----------------------------------------------------------------------------
@@ -172,6 +186,13 @@ typedef struct
  */
 IsoTp_StatusType IsoTp_Init(IsoTp_CanSendType    canSendFunction,
                             IsoTp_RxCallbackType rxCallback);
+
+/**
+ * @brief  Dat lai trang thai TX va RX ve Idle ma khong mat callback.
+ * @details Dung khi phien UDS bi huy giua chung (vi du: tester ngat ket noi).
+ *          Khong can goi lai IsoTp_Init().
+ */
+void IsoTp_Reset(void);
 
 /**
  * @brief  Gui mot ban tin qua ISO-TP.

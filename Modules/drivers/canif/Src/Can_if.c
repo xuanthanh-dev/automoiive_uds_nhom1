@@ -54,34 +54,28 @@ void CAN_IF_Init(void) {
 /**
  * @brief Hàm truyền dữ liệu CAN
  */
-CAN_StatusTypeDef CAN_IF_Transmit(uint16_t stdId, uint8_t *pData, uint8_t len)
-{
+CAN_StatusTypeDef CAN_IF_Transmit(uint16_t stdId, uint8_t *pData, uint8_t len) {
 	CAN_StatusTypeDef errorCode = OK;
 	HAL_StatusTypeDef halStatus = HAL_OK;
 
-	if (stdId > 0x7FFU)
-	{
+	if (stdId > 0x7FFU) {
 		errorCode = ERROR_INVALID_ID;
 	}
-	if (pData == NULL)
-	{
+	if (pData == NULL) {
 		errorCode = ERROR_NULL_POINTER;
 	}
-	if (len > 8 || len <= 0)
-	{
+	if (len > 8) {
 		errorCode = ERROR_INVALID_LENGTH;
 	}
 
-	if (OK == errorCode)
-	{
+	if (OK == errorCode) {
 		TxHeader.StdId = stdId;
 		TxHeader.IDE = CAN_ID_STD;
 		TxHeader.RTR = CAN_RTR_DATA;
 		TxHeader.DLC = len;
-		
+
 		halStatus = HAL_CAN_AddTxMessage(&hcan, &TxHeader, pData, &TxMailbox);
-		if (halStatus != HAL_OK)
-		{
+		if (halStatus != HAL_OK) {
 			errorCode = ERROR_TRANSMIT;
 		}
 	}
@@ -95,30 +89,52 @@ uint32_t CAN_IF_HandleTxError(void) {
 	uint32_t error = HAL_CAN_GetError(&hcan);
 	return error;
 }
+
+
 /**
- * @brief Hàm xử lý dữ liệu nhận được từ CAN
+ * @brief Lay frame CAN da nhan
  */
-void CAN_IF_ProcessReceivedFrame(void) {
-
-	printf("Rx ID:0x%03lX DLC:%lu Data:", RxHeader.StdId, RxHeader.DLC);
-
-	for (uint8_t i = 0; i < RxHeader.DLC; i++) {
-		printf("%02X ", RxData[i]);
+CAN_StatusTypeDef CAN_IF_GetReceivedFrame(uint32_t *stdId, uint8_t *data,uint8_t *dlc) {
+	CAN_StatusTypeDef errorCode = OK;
+	if (stdId == NULL) {
+		errorCode = ERROR_NULL_POINTER;
 	}
-	printf("\r\n");
+
+	if (data == NULL) {
+		errorCode = ERROR_NULL_POINTER;
+	}
+
+	if (dlc == NULL) {
+		errorCode = ERROR_NULL_POINTER;
+	}
+
+	if (HAL_CAN_GetRxFifoFillLevel(&hcan, CAN_RX_FIFO1) == 0U) {
+		errorCode = ERROR_INVALID_LENGTH;
+	}
+
+
+	*stdId = RxHeader.StdId;
+	*dlc = (uint8_t) RxHeader.DLC;
+
+	for (uint8_t i = 0U; i < 8U; i++) {
+		data[i] = RxData[i];
+	}
+
+	return errorCode;
 }
 /**
  * @brief Hàm xử lý ngắt nhận dữ liệu CAN
  */
-void CAN_IF_ProcessRxInterrupt(void) 
+CAN_StatusTypeDef CAN_IF_ProcessRxInterrupt(void)
 {
+	CAN_StatusTypeDef errorCode = OK;
+	HAL_StatusTypeDef halStatus = HAL_OK;
 	HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-
 	if (HAL_CAN_GetRxMessage(&hcan,
-	CAN_RX_FIFO1, &RxHeader, RxData) == HAL_OK) 
-	{
-		CAN_IF_ProcessReceivedFrame();
+	CAN_RX_FIFO1, &RxHeader, RxData) != HAL_OK) {
+		errorCode = ERROR_TRANSMIT;
 	}
+	return errorCode;
 }
 /**
  * @brief Callback nhận ngắt CAN FIFO 1

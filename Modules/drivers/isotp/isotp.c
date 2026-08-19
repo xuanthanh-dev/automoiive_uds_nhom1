@@ -9,6 +9,7 @@
  *          - Moi tham so dau vao deu duoc kiem tra
  *          - Moi nhanh if deu co else
  *          - Loi duoc luu vao context.lastError va tang errorCounter
+ *
  */
 
 #include "isotp.h"
@@ -56,13 +57,11 @@ static IsoTp_StatusType IsoTp_CopyBytes(uint8_t       *destination,
     IsoTp_StatusType status;
     uint16_t         index;
 
-    /* Kiem tra con tro NULL */
     if ((destination == 0) || (source == 0))
     {
         IsoTp_RecordError(ISOTP_ERR_NULL_POINTER);
         status = ISOTP_ERROR_NULL;
     }
-    /* Kiem tra do dai vuot suc chua buffer dich */
     else if (length > destCapacity)
     {
         IsoTp_RecordError(ISOTP_ERR_LENGTH_EXCEEDED);
@@ -78,6 +77,42 @@ static IsoTp_StatusType IsoTp_CopyBytes(uint8_t       *destination,
     }
 
     return status;
+}
+
+/*----------------------------------------------------------------------------
+ * Giai ma STmin tu gia tri byte FC sang don vi ms
+ *--------------------------------------------------------------------------*/
+
+/**
+ * @brief  Chuyen doi gia tri STmin trong FC frame sang ms.
+ * @details ISO 15765-2 6.5.5.5:
+ *          0x00-0x7F : 0..127 ms (truc tiep).
+ *          0xF1-0xF9 : 100us..900us -> lam tron len 1 ms.
+ *          Gia tri khac (0x80-0xF0, 0xFA-0xFF): du phong, xu ly nhu 0 ms.
+ * @param  stMinRaw  Byte STmin tu FC frame[2].
+ * @return Gia tri STmin tinh bang ms (uint8_t, toi da 127).
+ */
+static uint8_t IsoTp_DecodeStMin(uint8_t stMinRaw)
+{
+    uint8_t stMinMs;
+
+    if (stMinRaw <= ISOTP_STMIN_MAX_MS)
+    {
+        /* 0x00-0x7F: gia tri ms truc tiep */
+        stMinMs = stMinRaw;
+    }
+    else if ((stMinRaw >= ISOTP_STMIN_US_MIN) && (stMinRaw <= ISOTP_STMIN_US_MAX))
+    {
+        /* 0xF1-0xF9: 100us-900us, lam tron len 1 ms */
+        stMinMs = 1u;
+    }
+    else
+    {
+        /* Gia tri du phong: xu ly nhu 0 ms (gui ngay) */
+        stMinMs = 0u;
+    }
+
+    return stMinMs;
 }
 
 /*----------------------------------------------------------------------------
@@ -146,6 +181,7 @@ static IsoTp_StatusType IsoTp_SendSingleFrame(const uint8_t *message,
 /**
  * @brief  Gui mot First Frame va luu 6 byte dau vao context.
  * @return ISOTP_OK, hoac ma loi.
+ *
  */
 static IsoTp_StatusType IsoTp_SendFirstFrame(void)
 {
@@ -153,26 +189,35 @@ static IsoTp_StatusType IsoTp_SendFirstFrame(void)
     uint8_t          frame[ISOTP_CAN_FRAME_SIZE];
     uint8_t          index;
 
-    /* PCI 12 bit do dai: 4 bit cao o byte 0, 8 bit thap o byte 1 */
-    frame[0] = (uint8_t)(ISOTP_PCI_FIRST_FRAME |
-                         ((isoTpContext.tx.totalLength >> 8u) & ISOTP_PCI_VALUE_MASK));
-    frame[1] = (uint8_t)(isoTpContext.tx.totalLength & 0xFFu);
-
-    for (index = 0u; index < ISOTP_FF_FIRST_PAYLOAD; index++)
+    /* Bao ve: totalLength phai >= 6 byte de dien day FF payload */
+    if (isoTpContext.tx.totalLength < ISOTP_FF_FIRST_PAYLOAD)
     {
-        frame[index + 2u] = isoTpContext.tx.buffer[index];
-    }
-
-    isoTpContext.tx.sentIndex = ISOTP_FF_FIRST_PAYLOAD;
-
-    if (isoTpContext.canSend(frame, ISOTP_CAN_FRAME_SIZE) != 0u)
-    {
-        IsoTp_RecordError(ISOTP_ERR_SEND_FAILED);
-        status = ISOTP_ERROR_STATE;
+        IsoTp_RecordError(ISOTP_ERR_SF_BAD_LENGTH);
+        status = ISOTP_ERROR_SIZE;
     }
     else
     {
-        status = ISOTP_OK;
+        /* PCI 12 bit do dai: 4 bit cao o byte 0, 8 bit thap o byte 1 */
+        frame[0] = (uint8_t)(ISOTP_PCI_FIRST_FRAME |
+                             ((isoTpContext.tx.totalLength >> 8u) & ISOTP_PCI_VALUE_MASK));
+        frame[1] = (uint8_t)(isoTpContext.tx.totalLength & 0xFFu);
+
+        for (index = 0u; index < ISOTP_FF_FIRST_PAYLOAD; index++)
+        {
+            frame[index + 2u] = isoTpContext.tx.buffer[index];
+        }
+
+        isoTpContext.tx.sentIndex = ISOTP_FF_FIRST_PAYLOAD;
+
+        if (isoTpContext.canSend(frame, ISOTP_CAN_FRAME_SIZE) != 0u)
+        {
+            IsoTp_RecordError(ISOTP_ERR_SEND_FAILED);
+            status = ISOTP_ERROR_STATE;
+        }
+        else
+        {
+            status = ISOTP_OK;
+        }
     }
 
     return status;
@@ -185,6 +230,7 @@ static IsoTp_StatusType IsoTp_SendFirstFrame(void)
 /**
  * @brief  Gui mot Consecutive Frame tiep theo tu context.
  * @return ISOTP_OK, hoac ma loi.
+ *
  */
 static IsoTp_StatusType IsoTp_SendConsecutiveFrame(void)
 {
@@ -210,7 +256,9 @@ static IsoTp_StatusType IsoTp_SendConsecutiveFrame(void)
 
     for (index = 0u; index < ISOTP_CF_MAX_PAYLOAD; index++)
     {
-        if (index < (uint8_t)bytesToSend)
+        /* So sanh index (uint8_t) voi bytesToSend (uint16_t) truc tiep,
+           khong can cast vi bytesToSend luon <= 7 trong nhanh nay. */
+        if ((uint16_t)index < bytesToSend)
         {
             frame[index + 1u] =
                 isoTpContext.tx.buffer[isoTpContext.tx.sentIndex + index];
@@ -234,6 +282,22 @@ static IsoTp_StatusType IsoTp_SendConsecutiveFrame(void)
     }
     else
     {
+        /* Cap nhat blockCounter va kiem tra gioi han block */
+        isoTpContext.tx.blockCounter++;
+
+        if ((isoTpContext.tx.blockSize != 0u) &&
+            (isoTpContext.tx.blockCounter >= isoTpContext.tx.blockSize))
+        {
+            /* Da gui du so CF trong block nay, cho FC tiep theo */
+            isoTpContext.tx.state          = ISOTP_TX_WAIT_FC;
+            isoTpContext.tx.timerStartMs   = isoTpCurrentTimeMs;
+            isoTpContext.tx.blockCounter   = 0u;
+        }
+        else
+        {
+            /* Con trong block, tiep tuc gui o chu ky sau */
+        }
+
         status = ISOTP_OK;
     }
 
@@ -284,18 +348,12 @@ static IsoTp_StatusType IsoTp_HandleReceivedSingleFrame(const uint8_t *frame)
 }
 
 /*----------------------------------------------------------------------------
- * Xu ly First Frame nhan duoc
+ * Gui Flow Control (CTS)
  *--------------------------------------------------------------------------*/
 
 /**
- * @brief  Xu ly First Frame: luu 6 byte dau, gui Flow Control.
- * @param  frame  Con tro 8 byte frame.
- * @return ISOTP_OK, hoac ma loi.
- */
-/**
  * @brief  Gui mot Flow Control frame (CTS - cho phep gui tiep).
- * @details Tach rieng de code gon va de mo rong Block Size / STmin sau nay.
- *          Hien tai Block Size = 0, STmin = 0 (gui het khong cho).
+ * @details Block Size = 0 (gui het), STmin = 0 (khong cho giua frame).
  * @return ISOTP_OK neu gui thanh cong, ISOTP_ERROR_STATE neu canSend that bai.
  */
 static IsoTp_StatusType IsoTp_SendFlowControl(void)
@@ -329,6 +387,15 @@ static IsoTp_StatusType IsoTp_SendFlowControl(void)
     return status;
 }
 
+/*----------------------------------------------------------------------------
+ * Xu ly First Frame nhan duoc
+ *--------------------------------------------------------------------------*/
+
+/**
+ * @brief  Xu ly First Frame: luu 6 byte dau, gui Flow Control.
+ * @param  frame  Con tro 8 byte frame.
+ * @return ISOTP_OK, hoac ma loi.
+ */
 static IsoTp_StatusType IsoTp_HandleReceivedFirstFrame(const uint8_t *frame)
 {
     IsoTp_StatusType status;
@@ -464,19 +531,20 @@ static IsoTp_StatusType IsoTp_HandleReceivedConsecutiveFrame(const uint8_t *fram
  *--------------------------------------------------------------------------*/
 
 /**
- * @brief  Xu ly Flow Control: neu CTS thi cho phep gui CF.
+ * @brief  Xu ly Flow Control: doc BS/STmin, neu CTS thi cho phep gui CF.
  * @param  frame  Con tro 8 byte frame.
  * @return ISOTP_OK, hoac ma loi.
+ *
  */
 static IsoTp_StatusType IsoTp_HandleReceivedFlowControl(const uint8_t *frame)
 {
     IsoTp_StatusType status;
     uint8_t          flowStatus;
 
-    /* Chi xu ly khi dang cho Flow Control */
+    /* Chi xu ly khi dang cho Flow Control; dung ma loi dung */
     if (isoTpContext.tx.state != ISOTP_TX_WAIT_FC)
     {
-        IsoTp_RecordError(ISOTP_ERR_UNEXPECTED_CF);
+        IsoTp_RecordError(ISOTP_ERR_UNEXPECTED_FC);
         status = ISOTP_ERROR_STATE;
     }
     else
@@ -485,12 +553,21 @@ static IsoTp_StatusType IsoTp_HandleReceivedFlowControl(const uint8_t *frame)
 
         if (flowStatus == ISOTP_FC_CONTINUE_TO_SEND)
         {
+            /* Luu Block Size va STmin tu FC frame */
+            isoTpContext.tx.blockSize    = frame[1];
+            isoTpContext.tx.blockCounter = 0u;
+            isoTpContext.tx.stMinMs      = IsoTp_DecodeStMin(frame[2]);
+
+            /* Khoi dong timer STmin cho CF dau tien */
+            isoTpContext.tx.stMinTimerStartMs = isoTpCurrentTimeMs;
+
             isoTpContext.tx.state = ISOTP_TX_SENDING_CF;
             status = ISOTP_OK;
         }
         else if (flowStatus == ISOTP_FC_WAIT)
         {
-            /* Phia nhan yeu cau cho - giu nguyen trang thai */
+            /* Phia nhan yeu cau cho - reset timer N_Bs, giu nguyen trang thai */
+            isoTpContext.tx.timerStartMs = isoTpCurrentTimeMs;
             status = ISOTP_BUSY;
         }
         else if (flowStatus == ISOTP_FC_OVERFLOW)
@@ -516,13 +593,14 @@ static IsoTp_StatusType IsoTp_HandleReceivedFlowControl(const uint8_t *frame)
 
 /**
  * @brief  Khoi tao tang ISO-TP. Xem mo ta trong isotp.h.
+ *
  */
 IsoTp_StatusType IsoTp_Init(IsoTp_CanSendType    canSendFunction,
                             IsoTp_RxCallbackType rxCallback)
 {
     IsoTp_StatusType status;
+    uint8_t          index;
 
-    /* Kiem tra tham so dau vao */
     if ((canSendFunction == 0) || (rxCallback == 0))
     {
         status = ISOTP_ERROR_NULL;
@@ -532,27 +610,72 @@ IsoTp_StatusType IsoTp_Init(IsoTp_CanSendType    canSendFunction,
         isoTpContext.canSend    = canSendFunction;
         isoTpContext.rxCallback = rxCallback;
 
-        isoTpContext.tx.state          = ISOTP_TX_IDLE;
-        isoTpContext.tx.totalLength    = 0u;
-        isoTpContext.tx.sentIndex      = 0u;
-        isoTpContext.tx.sequenceNumber = 0u;
-        isoTpContext.tx.timerStartMs   = 0u;
+        /* TX context */
+        isoTpContext.tx.state              = ISOTP_TX_IDLE;
+        isoTpContext.tx.totalLength        = 0u;
+        isoTpContext.tx.sentIndex          = 0u;
+        isoTpContext.tx.sequenceNumber     = 0u;
+        isoTpContext.tx.timerStartMs       = 0u;
+        isoTpContext.tx.blockSize          = 0u;
+        isoTpContext.tx.blockCounter       = 0u;
+        isoTpContext.tx.stMinMs            = 0u;
+        isoTpContext.tx.stMinTimerStartMs  = 0u;
 
+        /* RX context */
         isoTpContext.rx.state          = ISOTP_RX_IDLE;
         isoTpContext.rx.totalLength    = 0u;
         isoTpContext.rx.receivedIndex  = 0u;
         isoTpContext.rx.sequenceNumber = 0u;
         isoTpContext.rx.timerStartMs   = 0u;
 
-        isoTpContext.lastError       = ISOTP_ERR_NONE;
-        isoTpContext.errorCounter    = 0u;
-        isoTpCurrentTimeMs = 0u;
-        isoTpContext.isInitialised   = 1u;
+        /* Zero-init buffers */
+        for (index = 0u; index < ISOTP_MAX_MESSAGE_SIZE; index++)
+        {
+            isoTpContext.tx.buffer[index] = 0u;
+            isoTpContext.rx.buffer[index] = 0u;
+        }
+
+        isoTpContext.lastError     = ISOTP_ERR_NONE;
+        isoTpContext.errorCounter  = 0u;
+        isoTpCurrentTimeMs         = 0u;
+        isoTpContext.isInitialised = 1u;
 
         status = ISOTP_OK;
     }
 
     return status;
+}
+
+/**
+ * @brief  Dat lai trang thai TX va RX ve Idle ma khong mat callback.
+ */
+void IsoTp_Reset(void)
+{
+    uint8_t index;
+
+    isoTpContext.tx.state             = ISOTP_TX_IDLE;
+    isoTpContext.tx.totalLength       = 0u;
+    isoTpContext.tx.sentIndex         = 0u;
+    isoTpContext.tx.sequenceNumber    = 0u;
+    isoTpContext.tx.timerStartMs      = 0u;
+    isoTpContext.tx.blockSize         = 0u;
+    isoTpContext.tx.blockCounter      = 0u;
+    isoTpContext.tx.stMinMs           = 0u;
+    isoTpContext.tx.stMinTimerStartMs = 0u;
+
+    isoTpContext.rx.state          = ISOTP_RX_IDLE;
+    isoTpContext.rx.totalLength    = 0u;
+    isoTpContext.rx.receivedIndex  = 0u;
+    isoTpContext.rx.sequenceNumber = 0u;
+    isoTpContext.rx.timerStartMs   = 0u;
+
+    for (index = 0u; index < ISOTP_MAX_MESSAGE_SIZE; index++)
+    {
+        isoTpContext.tx.buffer[index] = 0u;
+        isoTpContext.rx.buffer[index] = 0u;
+    }
+
+    /* Giu nguyen: canSend, rxCallback, isInitialised, lastError, errorCounter */
 }
 
 /**
@@ -564,44 +687,36 @@ IsoTp_StatusType IsoTp_Send(const uint8_t *message,
 {
     IsoTp_StatusType status;
 
-    /* Luu thoi gian cua lan goi nay de set timer WAIT_FC */
     isoTpCurrentTimeMs = currentTimeMs;
 
-    /* Kiem tra da khoi tao chua */
     if (isoTpContext.isInitialised == 0u)
     {
         IsoTp_RecordError(ISOTP_ERR_NOT_INITIALISED);
         status = ISOTP_ERROR_STATE;
     }
-    /* Kiem tra con tro NULL */
     else if (message == 0)
     {
         IsoTp_RecordError(ISOTP_ERR_NULL_POINTER);
         status = ISOTP_ERROR_NULL;
     }
-    /* Kiem tra do dai bang 0 */
     else if (length == 0u)
     {
         IsoTp_RecordError(ISOTP_ERR_ZERO_LENGTH);
         status = ISOTP_ERROR_SIZE;
     }
-    /* Kiem tra do dai vuot gioi han */
     else if (length > ISOTP_MAX_MESSAGE_SIZE)
     {
         IsoTp_RecordError(ISOTP_ERR_LENGTH_EXCEEDED);
         status = ISOTP_ERROR_SIZE;
     }
-    /* Kiem tra dang ban khong */
     else if (isoTpContext.tx.state != ISOTP_TX_IDLE)
     {
         status = ISOTP_BUSY;
     }
-    /* Truong hop ngan: Single Frame */
     else if (length <= ISOTP_SF_MAX_PAYLOAD)
     {
         status = IsoTp_SendSingleFrame(message, length);
     }
-    /* Truong hop dai: bat dau multi-frame */
     else
     {
         status = IsoTp_CopyBytes(isoTpContext.tx.buffer,
@@ -611,9 +726,13 @@ IsoTp_StatusType IsoTp_Send(const uint8_t *message,
 
         if (status == ISOTP_OK)
         {
-            isoTpContext.tx.totalLength    = length;
-            isoTpContext.tx.sequenceNumber = 1u;
-            isoTpContext.tx.state          = ISOTP_TX_WAIT_FC;
+            isoTpContext.tx.totalLength       = length;
+            isoTpContext.tx.sequenceNumber    = 1u;
+            isoTpContext.tx.blockSize         = 0u;
+            isoTpContext.tx.blockCounter      = 0u;
+            isoTpContext.tx.stMinMs           = 0u;
+            isoTpContext.tx.stMinTimerStartMs = 0u;
+            isoTpContext.tx.state             = ISOTP_TX_WAIT_FC;
 
             /* Bat dau dem timeout N_Bs cho Flow Control */
             isoTpContext.tx.timerStartMs = isoTpCurrentTimeMs;
@@ -639,22 +758,18 @@ IsoTp_StatusType IsoTp_OnCanFrame(const uint8_t *frame,
     IsoTp_StatusType status;
     uint8_t          frameType;
 
-    /* Luu thoi gian cua lan goi nay de handler set timer truc tiep */
     isoTpCurrentTimeMs = currentTimeMs;
 
-    /* Kiem tra da khoi tao chua */
     if (isoTpContext.isInitialised == 0u)
     {
         IsoTp_RecordError(ISOTP_ERR_NOT_INITIALISED);
         status = ISOTP_ERROR_STATE;
     }
-    /* Kiem tra con tro NULL */
     else if (frame == 0)
     {
         IsoTp_RecordError(ISOTP_ERR_NULL_POINTER);
         status = ISOTP_ERROR_NULL;
     }
-    /* Kiem tra dlc hop le */
     else if ((dlc == 0u) || (dlc > ISOTP_CAN_FRAME_SIZE))
     {
         IsoTp_RecordError(ISOTP_ERR_INVALID_FRAME);
@@ -682,7 +797,6 @@ IsoTp_StatusType IsoTp_OnCanFrame(const uint8_t *frame,
         }
         else
         {
-            /* Loai frame khong thuoc 4 loai hop le - luu loi */
             IsoTp_RecordError(ISOTP_ERR_INVALID_FRAME);
             status = ISOTP_ERROR_FRAME;
         }
@@ -693,6 +807,7 @@ IsoTp_StatusType IsoTp_OnCanFrame(const uint8_t *frame,
 
 /**
  * @brief  Ham chu ky. Xem mo ta trong isotp.h.
+ *
  */
 IsoTp_StatusType IsoTp_MainFunction(uint32_t currentTimeMs)
 {
@@ -707,28 +822,40 @@ IsoTp_StatusType IsoTp_MainFunction(uint32_t currentTimeMs)
     {
         status = ISOTP_OK;
 
-        /* Luu thoi gian de cac ham Handle set timer */
         isoTpCurrentTimeMs = currentTimeMs;
 
-        /* Neu dang gui CF thi gui frame tiep theo */
+        /* --- TX state machine --- */
         if (isoTpContext.tx.state == ISOTP_TX_SENDING_CF)
         {
-            if (isoTpContext.tx.sentIndex < isoTpContext.tx.totalLength)
+            /* Kiem tra STmin truoc khi gui CF */
+            if ((currentTimeMs - isoTpContext.tx.stMinTimerStartMs) >=
+                (uint32_t)isoTpContext.tx.stMinMs)
             {
-                status = IsoTp_SendConsecutiveFrame();
-            }
-            else
-            {
-                /* Khong con byte de gui */
-            }
+                if (isoTpContext.tx.sentIndex < isoTpContext.tx.totalLength)
+                {
+                    status = IsoTp_SendConsecutiveFrame();
 
-            if (isoTpContext.tx.sentIndex >= isoTpContext.tx.totalLength)
-            {
-                isoTpContext.tx.state = ISOTP_TX_IDLE;
+                    /* Khoi dong lai timer STmin cho CF tiep theo */
+                    isoTpContext.tx.stMinTimerStartMs = currentTimeMs;
+                }
+                else
+                {
+                    /* Khong con byte de gui */
+                }
+
+                /* Kiem tra hoan thanh toan bo ban tin */
+                if (isoTpContext.tx.sentIndex >= isoTpContext.tx.totalLength)
+                {
+                    isoTpContext.tx.state = ISOTP_TX_IDLE;
+                }
+                else
+                {
+                    /* Con byte, cho lan MainFunction sau */
+                }
             }
             else
             {
-                /* Con byte, cho lan MainFunction sau */
+                /* Chua het STmin, cho them */
             }
         }
         /* Kiem tra timeout cho Flow Control (N_Bs) */
@@ -751,7 +878,7 @@ IsoTp_StatusType IsoTp_MainFunction(uint32_t currentTimeMs)
             /* TX Idle, khong lam gi */
         }
 
-        /* Kiem tra timeout cho Consecutive Frame (N_Cr) */
+        /* --- RX: Kiem tra timeout cho Consecutive Frame (N_Cr) --- */
         if (isoTpContext.rx.state == ISOTP_RX_RECEIVING_CF)
         {
             if ((currentTimeMs - isoTpContext.rx.timerStartMs) >
