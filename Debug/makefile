@@ -9,6 +9,7 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
+-include Modules/drivers/isotp/subdir.mk
 -include Drivers/STM32F1xx_HAL_Driver/Src/subdir.mk
 -include Core/Startup/subdir.mk
 -include Core/Src/subdir.mk
@@ -60,8 +61,8 @@ all: main-build
 main-build: Phase2_FPT.elf secondary-outputs
 
 # Tool invocations
-Phase2_FPT.elf Phase2_FPT.map: $(OBJS) $(USER_OBJS) D:\STM32CubeIDE_1.18.0\Workspace\Phase2_FPT\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "Phase2_FPT.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"D:\STM32CubeIDE_1.18.0\Workspace\Phase2_FPT\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Phase2_FPT.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+Phase2_FPT.elf Phase2_FPT.map: $(OBJS) $(USER_OBJS) C:\Users\TienDung\Documents\FPT_Software\automoiive_uds_nhom1\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "Phase2_FPT.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\TienDung\Documents\FPT_Software\automoiive_uds_nhom1\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Phase2_FPT.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

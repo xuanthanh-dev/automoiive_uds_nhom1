@@ -1,24 +1,3 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.h
-  * @brief          : Header for main.c file.
-  *                   This file contains the common defines of the application.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-
-/* Define to prevent recursive inclusion -------------------------------------*/
 #ifndef __MAIN_H
 #define __MAIN_H
 
@@ -26,41 +5,43 @@
 extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
 #include "stm32f1xx_hal.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
+/* =========================================================
+ * STM32 PERIPHERALS
+ * ========================================================= */
 
-/* USER CODE END Includes */
 
-/* Exported types ------------------------------------------------------------*/
-/* USER CODE BEGIN ET */
+extern UART_HandleTypeDef huart1;
 
-/* USER CODE END ET */
 
-/* Exported constants --------------------------------------------------------*/
-/* USER CODE BEGIN EC */
+/* =========================================================
+ * FUNCTION PROTOTYPES
+ * ========================================================= */
 
-/* USER CODE END EC */
+void SystemClock_Config(void);
 
-/* Exported macro ------------------------------------------------------------*/
-/* USER CODE BEGIN EM */
+void MX_GPIO_Init(void);
 
-/* USER CODE END EM */
+void MX_USART1_UART_Init(void);
 
-/* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
-/* USER CODE BEGIN EFP */
 
-/* USER CODE END EFP */
+/* =========================================================
+ * ISO-TP UNIT TEST
+ * ========================================================= */
 
-/* Private defines -----------------------------------------------------------*/
 
-/* USER CODE BEGIN Private defines */
+/* =========================================================
+ * UART printf
+ * ========================================================= */
 
-/* USER CODE END Private defines */
+int _write(int file, char *ptr, int len);
+
 
 #ifdef __cplusplus
 }

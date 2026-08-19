@@ -1,0 +1,11 @@
+../Modules/drivers/isotp/isotp.c:23:25:IsoTp_CopyBytes	32	static
+../Modules/drivers/isotp/isotp.c:56:25:IsoTp_PrepareFrame	24	static
+../Modules/drivers/isotp/isotp.c:88:13:IsoTp_ClearTransmit	24	static
+../Modules/drivers/isotp/isotp.c:114:13:IsoTp_ClearReceive	24	static
+../Modules/drivers/isotp/isotp.c:136:18:IsoTp_Init	24	static
+../Modules/drivers/isotp/isotp.c:167:18:IsoTp_StartSegmentation	32	static
+../Modules/drivers/isotp/isotp.c:221:18:IsoTp_GetNextFrame	24	static
+../Modules/drivers/isotp/isotp.c:346:18:IsoTp_ProcessFrame	40	static
+../Modules/drivers/isotp/isotp.c:584:18:IsoTp_ReadPayload	32	static
+../Modules/drivers/isotp/isotp.c:626:18:IsoTp_GetStatus	24	static
+../Modules/drivers/isotp/isotp.c:651:18:IsoTp_Reset	24	static
