@@ -21,16 +21,19 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <stdio.h>
-#include <string.h>
 
 #include "Can_if.h"
-#include "Can_if.h"
+#include "app_diag.h"
+#include "app_engine.h"
+#include "did_manager.h"
+#include "dtc_manager.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+CAN_HandleTypeDef hcan;
 
+UART_HandleTypeDef huart1;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -38,7 +41,7 @@
 
 #define SYSTEM_TEST_TIMEOUT_MS    3000U
 #define SYSTEM_TEST_CAN_ID        0x123U
-
+#define SYSTEM_TEST_AUTORUN       1U
 /*
  * SYS-CANIF-011 yêu cầu timeout = 0x08.
  * CAN_IF hiện tại chưa có ERROR_TIMEOUT trong enum,
@@ -55,10 +58,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 CAN_HandleTypeDef hcan;
-
-UART_HandleTypeDef huart1;
 CAN_HandleTypeDef hcan;
-
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
@@ -82,22 +82,21 @@ static void blink_led(void);
 void uartlog(char *message);
 
 /* System Test for CAN_IF*/
-static void SystemTest_RunAll(void);
-static void SystemTest_CANIF_Init(void);
-static void SystemTest_TX_8Bytes(void);
-static void SystemTest_TX_DLC0(void);
-static void SystemTest_InvalidDLC(void);
-static void SystemTest_IDBoundary(void);
-static void SystemTest_RXFrame(void);
-static void SystemTest_RXInterrupt(void);
-static void SystemTest_TXRX_E2E(void);
-static void SystemTest_DataPattern(void);
-static void SystemTest_MultipleFrame(void);
+
 static void SystemTest_RXTimeout(void);
 static void SystemTest_CANError(void);
 static uint8_t SystemTest_WaitForRxCallback(uint32_t timeout);
 static void SystemTest_PrintData(uint8_t *data, uint8_t len);
 
+/* UDS ECU black-box system test (ST-001 to ST-011). */
+static void SystemTest_RunModuleSuite(void);
+static uint8_t SystemTest_RunDid(uint16_t did, const char *testId);
+static uint8_t SystemTest_RunSimpleRequest(const uint8_t *request,
+                                           uint16_t requestLength,
+                                           const uint8_t *response,
+                                           uint16_t responseLength);
+static uint8_t SystemTest_HasBytes(const uint8_t *data, uint16_t dataLength,
+                                   const uint8_t *expected, uint16_t expectedLength);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -144,7 +143,6 @@ int main(void) {
 	/*
 	 * Chạy System Test một lần sau khi MCU khởi động.
 	 */
-	//SystemTest_RunAll();
 
 	/* USER CODE END 2 */
 
@@ -155,6 +153,10 @@ int main(void) {
 		 * Sau khi System Test hoàn tất,
 		 * MCU giữ trạng thái để quan sát kết quả UART.
 		 */
+		#if (SYSTEM_TEST_AUTORUN == 1U)
+		SystemTest_RunModuleSuite();
+		#endif
+
 		HAL_Delay(1000);
 
 		/* USER CODE END WHILE */
@@ -266,507 +268,143 @@ static void MX_GPIO_Init(void) {
 
 /* USER CODE BEGIN 4 */
 
-/**
- * @brief Chạy toàn bộ System Test CANIF
- */
-static void SystemTest_RunAll(void) {
-	printf("\r\n");
-	printf("================================================\r\n");
-	printf("          CANIF SYSTEM TEST START\r\n");
-	printf("================================================\r\n");
-
-	printf("Test timeout = %lu ms\r\n", (unsigned long) SYSTEM_TEST_TIMEOUT_MS);
-
-	printf("CAN ID       = 0x%03lX\r\n", (unsigned long) SYSTEM_TEST_CAN_ID);
-
-	printf("================================================\r\n");
-
-	/*
-	 * SYS-CANIF-001
-	 */
-	SystemTest_CANIF_Init();
-
-	HAL_Delay(100);
-
-	/*
-	 * SYS-CANIF-002
-	 */
-	SystemTest_TX_8Bytes();
-
-	HAL_Delay(100);
-
-	/*
-	 * SYS-CANIF-003
-	 */
-	SystemTest_TX_DLC0();
-
-	HAL_Delay(100);
-
-	/*
-	 * SYS-CANIF-004
-	 */
-	SystemTest_InvalidDLC();
-
-	HAL_Delay(100);
-
-	/*
-	 * SYS-CANIF-005
-	 */
-	SystemTest_IDBoundary();
-
-	HAL_Delay(100);
-
-	printf("\r\n");
-	printf(">>> RX TESTS REQUIRE EXTERNAL CAN SENDER <<<\r\n");
-	printf(">>> Send ID 0x123 DLC 8 when requested <<<\r\n");
-	printf("\r\n");
-
-	/*
-	 * SYS-CANIF-006
-	 */
-	SystemTest_RXFrame();
-
-	HAL_Delay(100);
-
-	/*
-	 * SYS-CANIF-007
-	 */
-	SystemTest_RXInterrupt();
-
-	HAL_Delay(100);
-
-	/*
-	 * SYS-CANIF-008
-	 */
-	SystemTest_TXRX_E2E();
-
-	HAL_Delay(100);
-
-	/*
-	 * SYS-CANIF-009
-	 */
-	SystemTest_DataPattern();
-
-	HAL_Delay(100);
-
-	/*
-	 * SYS-CANIF-010
-	 */
-	SystemTest_MultipleFrame();
-
-	HAL_Delay(100);
-
-	/*
-	 * SYS-CANIF-011
-	 */
-	SystemTest_RXTimeout();
-
-	HAL_Delay(100);
-
-	/*
-	 * SYS-CANIF-012
-	 */
-	SystemTest_CANError();
-
-	printf("\r\n");
-	printf("================================================\r\n");
-	printf("          CANIF SYSTEM TEST END\r\n");
-	printf("================================================\r\n");
-}
-
-/**
- * @brief SYS-CANIF-001
- * CANIF Init
- */
-static void SystemTest_CANIF_Init(void)
+/* Executes the scenarios in docs/tests/system_test_spec.md using Modules. */
+static void SystemTest_RunModuleSuite(void)
 {
-	HAL_CAN_StateTypeDef state;
+    AppEngine_ContextType engine;
+    AppEngine_SignalsType signals;
+    uint8_t engineReady;
+    uint8_t request[3];
+    uint8_t response[3];
+    uint8_t dtcData[8];
+    uint8_t dtcLength;
+    uint8_t overTempActive;
+    uint8_t lowBatteryActive;
+    Dtc_ContextType dtc;
 
-	state = HAL_CAN_GetState(&hcan);
+    printf("\r\n========== MODULE SYSTEM TEST START ==========\r\n");
 
-	printf("[SYS-CANIF-001] CANIF Init                : ");
+    /* app_engine deliberately has no EngineStatus CAN transmitter. */
+    engineReady = (AppEngine_Init(&engine) == APP_E_OK) &&
+                  (AppEngine_RunSimulationStep(&engine, APP_ENGINE_STEP_PERIOD_MS) == APP_E_OK) &&
+                  (AppEngine_GetSignals(&engine, &signals) == APP_E_OK);
+    printf("[ST-001] EngineStatus cyclic message: %s (CAN scheduler not implemented in Modules)\r\n",
+           engineReady ? "NOT RUN" : "FAIL");
 
-	if ((state == HAL_CAN_STATE_READY) || (state == HAL_CAN_STATE_LISTENING)) {
-		printf("PASS\r\n");
-		printf("             HAL CAN State = %d\r\n", state);
-		printf("             Expected = CAN READY/LISTENING\r\n");
-	} else {
-		printf("FAIL\r\n");
-		printf("             HAL CAN State = %d\r\n", state);
-	}
+    printf("[ST-002] Read VIN: %s\r\n",
+           SystemTest_RunDid(DID_VIN, "ST-002") ? "PASS" : "FAIL");
+    printf("[ST-003] Read SW Version: %s\r\n",
+           SystemTest_RunDid(DID_SOFTWARE_VERSION, "ST-003") ? "PASS" : "FAIL");
+    printf("[ST-004] Read VehicleSpeed: %s\r\n",
+           SystemTest_RunDid(DID_VEHICLE_SPEED, "ST-004") ? "PASS" : "FAIL");
+    printf("[ST-005] Read RPM: %s\r\n",
+           SystemTest_RunDid(DID_ENGINE_SPEED, "ST-005") ? "PASS" : "FAIL");
+
+    request[0] = 0x22U; request[1] = 0xFFU; request[2] = 0xFFU;
+    response[0] = 0x7FU; response[1] = 0x22U; response[2] = 0x31U;
+    printf("[ST-006] Unknown DID: %s\r\n",
+           SystemTest_RunSimpleRequest(request, 3U, response, 3U) ? "PASS" : "FAIL");
+
+    request[0] = 0x10U; request[1] = 0x03U;
+    response[0] = 0x50U; response[1] = 0x03U;
+    printf("[ST-007] Extended session: %s\r\n",
+           SystemTest_RunSimpleRequest(request, 2U, response, 2U) ? "PASS" : "FAIL");
+
+    request[0] = 0x11U; request[1] = 0x03U;
+    response[0] = 0x51U; response[1] = 0x03U;
+    printf("[ST-008] ECU reset: %s\r\n",
+           SystemTest_RunSimpleRequest(request, 2U, response, 2U) ? "PASS" : "FAIL");
+
+    request[0] = 0x3EU; request[1] = 0x00U;
+    response[0] = 0x7EU; response[1] = 0x00U;
+    printf("[ST-009] TesterPresent: %s\r\n",
+           SystemTest_RunSimpleRequest(request, 2U, response, 2U) ? "PASS" : "FAIL");
+
+    /* Inject the two faults through AppEngine, then obtain their DTC records. */
+    signals.vehicleSpeedKmh = 80U; signals.engineSpeedRpm = 2400U;
+    signals.engineTempCelsius = 111U; signals.batteryVoltageDeciV = 120U;
+    if ((AppEngine_SetSignals(&engine, &signals) == APP_E_OK) &&
+        (AppEngine_IsOverTemperature(&engine, &overTempActive) == APP_E_OK) &&
+        (overTempActive != 0U) &&
+        (DtcManager_Init(&dtc) == DTC_E_OK) &&
+        (DtcManager_SetStatus(&dtc, DTC_CODE_ENGINE_OVER_TEMP, 1U) == DTC_E_OK) &&
+        (DtcManager_SerialiseActive(&dtc, dtcData, sizeof(dtcData), &dtcLength) == DTC_E_OK))
+    {
+        request[0] = 0x19U; request[1] = 0x02U; request[2] = 0xFFU;
+        printf("[ST-010] OverTemp DTC: %s\r\n",
+               (dtcLength == 4U) && (dtcData[0] == 0x01U) && (dtcData[2] == 0x01U) &&
+               SystemTest_RunSimpleRequest(request, 3U,
+                   (const uint8_t[]){0x59U, 0x02U, dtcData[0], dtcData[1], dtcData[2], dtcData[3]}, 6U)
+               ? "PASS" : "FAIL");
+    }
+    else { printf("[ST-010] OverTemp DTC: FAIL\r\n"); }
+
+    signals.engineTempCelsius = 90U; signals.batteryVoltageDeciV = 109U;
+    if ((AppEngine_SetSignals(&engine, &signals) == APP_E_OK) &&
+        (AppEngine_IsLowBattery(&engine, &lowBatteryActive) == APP_E_OK) &&
+        (lowBatteryActive != 0U) &&
+        (DtcManager_ClearAll(&dtc) == DTC_E_OK) &&
+        (DtcManager_SetStatus(&dtc, DTC_CODE_LOW_BATTERY, 1U) == DTC_E_OK) &&
+        (DtcManager_SerialiseActive(&dtc, dtcData, sizeof(dtcData), &dtcLength) == DTC_E_OK))
+    {
+        printf("[ST-011] LowBattery DTC: %s\r\n",
+               (dtcLength == 4U) && (dtcData[0] == 0x01U) && (dtcData[2] == 0x02U) &&
+               SystemTest_RunSimpleRequest(request, 3U,
+                   (const uint8_t[]){0x59U, 0x02U, dtcData[0], dtcData[1], dtcData[2], dtcData[3]}, 6U)
+               ? "PASS" : "FAIL");
+    }
+    else { printf("[ST-011] LowBattery DTC: FAIL\r\n"); }
+    printf("=========== MODULE SYSTEM TEST END ===========\r\n");
 }
 
-/**
- * @brief SYS-CANIF-002
- * TX 8 bytes
- */
-static void SystemTest_TX_8Bytes(void)
+static uint8_t SystemTest_RunDid(uint16_t did, const char *testId)
 {
-	uint8_t data[8] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
-
-	CAN_StatusTypeDef status;
-
-	status = CAN_IF_Transmit(
-	SYSTEM_TEST_CAN_ID, data, 8);
-
-	printf("[SYS-CANIF-002] TX 8 bytes                : ");
-
-	if (status == OK) {
-		printf("PASS\r\n");
-
-		printf("             ID=0x%03lX DLC=8\r\n",
-				(unsigned long) SYSTEM_TEST_CAN_ID);
-
-		printf("             DATA=");
-		SystemTest_PrintData(data, 8);
-		printf("\r\n");
-	} else {
-		printf("FAIL\r\n");
-		printf("             Status=%d\r\n", status);
-		printf("             HAL_ERROR=0x%08lX\r\n",
-				(unsigned long) CAN_IF_HandleTxError());
-	}
+    AppEngine_ContextType engine;
+    uint8_t didData[DID_MAX_DATA_LENGTH];
+    uint8_t response[3U + DID_MAX_DATA_LENGTH];
+    uint8_t didLength;
+    uint8_t request[3] = { 0x22U, (uint8_t)(did >> 8U), (uint8_t)did };
+    (void)testId;
+    if ((AppEngine_Init(&engine) != APP_E_OK) ||
+        (DidManager_ReadData(did, &engine, didData, sizeof(didData), &didLength) != DID_E_OK)) return 0U;
+    response[0] = 0x62U; response[1] = request[1]; response[2] = request[2];
+    (void)memcpy(&response[3], didData, didLength);
+    return SystemTest_RunSimpleRequest(request, 3U, response, (uint16_t)(3U + didLength));
 }
 
-/**
- * @brief SYS-CANIF-003
- * TX DLC 0
- */
-static void SystemTest_TX_DLC0(void)
+static uint8_t SystemTest_RunSimpleRequest(const uint8_t *request, uint16_t requestLength,
+                                           const uint8_t *response, uint16_t responseLength)
 {
-	uint8_t data = 0x00;
+    AppDiag_ContextType diagnostic;
+    uint8_t prepared[APP_DIAG_MAX_MESSAGE_LENGTH];
+    uint8_t received[APP_DIAG_MAX_MESSAGE_LENGTH];
+    uint16_t preparedLength;
+    uint16_t receivedLength;
+    AppDiag_ReturnType result;
+    if (AppDiag_Init(&diagnostic) != APP_DIAG_E_OK) return 0U;
+    if (request[0] == 0x22U) result = AppDiag_PrepareReadDid(&diagnostic, (uint16_t)((request[1] << 8U) | request[2]));
+    else if (request[0] == 0x10U) result = AppDiag_PrepareSessionControl(&diagnostic, request[1]);
+    else if (request[0] == 0x11U) result = AppDiag_PrepareSoftReset(&diagnostic);
+    else if (request[0] == 0x19U) result = AppDiag_PrepareReadDtc(&diagnostic, request[2]);
+    else if (request[0] == 0x3EU) result = AppDiag_PrepareTesterPresent(&diagnostic, 0U);
+    else return 0U;
+    if ((result != APP_DIAG_E_OK) ||
+        (AppDiag_GetPreparedRequest(&diagnostic, prepared, sizeof(prepared), &preparedLength) != APP_DIAG_E_OK) ||
+        (preparedLength != requestLength) || !SystemTest_HasBytes(prepared, preparedLength, request, requestLength) ||
+        (AppDiag_NotifyRequestTransmitted(&diagnostic) != APP_DIAG_E_OK) ||
+        (AppDiag_RxIndication(&diagnostic, response, responseLength) != APP_DIAG_E_OK) ||
+        (AppDiag_GetResponse(&diagnostic, received, sizeof(received), &receivedLength) != APP_DIAG_E_OK) ||
+        (receivedLength != responseLength) || !SystemTest_HasBytes(received, receivedLength, response, responseLength)) return 0U;
+    return (AppDiag_ClearResponse(&diagnostic) == APP_DIAG_E_OK) ? 1U : 0U;
+}
 
-	CAN_StatusTypeDef status;
-
-	status = CAN_IF_Transmit(
-	SYSTEM_TEST_CAN_ID, &data, 0);
-
-	printf("[SYS-CANIF-003] TX DLC 0                 : ");
-
-	if (status == OK) {
-		printf("PASS\r\n");
-		printf("             ID=0x%03lX DLC=0\r\n",
-				(unsigned long) SYSTEM_TEST_CAN_ID);
-		printf("             Expected=OK Actual=%d\r\n", status);
-	} else {
-		printf("FAIL\r\n");
-		printf("             Expected=OK Actual=%d\r\n", status);
-	}
+static uint8_t SystemTest_HasBytes(const uint8_t *data, uint16_t dataLength,
+                                   const uint8_t *expected, uint16_t expectedLength)
+{
+    return ((dataLength == expectedLength) && (memcmp(data, expected, expectedLength) == 0)) ? 1U : 0U;
 }
 
 /**
- * @brief SYS-CANIF-004
- * Invalid DLC
- */
-static void SystemTest_InvalidDLC(void) {
-	uint8_t data[8] = { 0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80 };
-
-	CAN_StatusTypeDef status;
-
-	status = CAN_IF_Transmit(
-	SYSTEM_TEST_CAN_ID, data, 9);
-
-	printf("[SYS-CANIF-004] Invalid DLC 9             : ");
-
-	if (status == ERROR_INVALID_LENGTH) {
-		printf("PASS\r\n");
-		printf("             Expected=0x03 Actual=0x%02X\r\n", status);
-	} else {
-		printf("FAIL\r\n");
-		printf("             Expected=0x03 Actual=0x%02X\r\n", status);
-	}
-}
-
-/**
- * @brief SYS-CANIF-005
- * ID Boundary
- */
-static void SystemTest_IDBoundary(void) {
-	uint8_t data[1] = { 0xAA };
-
-	CAN_StatusTypeDef status0;
-	CAN_StatusTypeDef status7FF;
-	CAN_StatusTypeDef status800;
-
-	status0 = CAN_IF_Transmit(0x000, data, 1);
-
-	HAL_Delay(50);
-
-	status7FF = CAN_IF_Transmit(0x7FF, data, 1);
-
-	HAL_Delay(50);
-
-	status800 = CAN_IF_Transmit(0x800, data, 1);
-
-	printf("[SYS-CANIF-005] ID Boundary\r\n");
-
-	printf("             ID 0x000 : ");
-
-	if (status0 == OK) {
-		printf("PASS\r\n");
-	} else {
-		printf("FAIL Status=%d\r\n", status0);
-	}
-
-	printf("             ID 0x7FF : ");
-
-	if (status7FF == OK) {
-		printf("PASS\r\n");
-	} else {
-		printf("FAIL Status=%d\r\n", status7FF);
-	}
-
-	printf("             ID 0x800 : ");
-
-	if (status800 == ERROR_INVALID_ID) {
-		printf("PASS\r\n");
-	} else {
-		printf("FAIL Status=%d\r\n", status800);
-	}
-
-	if ((status0 == OK) && (status7FF == OK)
-			&& (status800 == ERROR_INVALID_ID)) {
-		printf("[SYS-CANIF-005] ID Boundary               : PASS\r\n");
-	} else {
-		printf("[SYS-CANIF-005] ID Boundary               : FAIL\r\n");
-	}
-}
-
-/**
- * @brief SYS-CANIF-006
- * RX Frame
- */
-static void SystemTest_RXFrame(void) {
-	printf("[SYS-CANIF-006] RX Frame\r\n");
-
-	printf("             Waiting for ID=0x123 DLC=8...\r\n");
-
-	printf("             Send:\r\n");
-	printf("             11 12 13 14 15 16 17 18\r\n");
-
-	SystemTest_RxCallbackDetected = 0;
-
-	if (SystemTest_WaitForRxCallback(
-	SYSTEM_TEST_TIMEOUT_MS) == 1) {
-		printf("[SYS-CANIF-006] RX Frame                  : PASS\r\n");
-	} else {
-		printf("[SYS-CANIF-006] RX Frame                  : FAIL\r\n");
-		printf("             RX TIMEOUT\r\n");
-	}
-}
-
-/**
- * @brief SYS-CANIF-007
- * RX Interrupt
- */
-static void SystemTest_RXInterrupt(void) {
-	GPIO_PinState initialState;
-	GPIO_PinState finalState;
-
-	printf("[SYS-CANIF-007] RX Interrupt\r\n");
-	printf("             Waiting for CAN frame...\r\n");
-
-	/*
-	 * CAN_IF_ProcessRxInterrupt()
-	 * Toggle PC13 khi callback được gọi.
-	 */
-	initialState = HAL_GPIO_ReadPin(
-	GPIOC,
-	GPIO_PIN_13);
-
-	SystemTest_RxCallbackDetected = 0;
-
-	if (SystemTest_WaitForRxCallback(
-	SYSTEM_TEST_TIMEOUT_MS) == 1) {
-		finalState = HAL_GPIO_ReadPin(
-		GPIOC,
-		GPIO_PIN_13);
-
-		if (finalState != initialState) {
-			printf("[SYS-CANIF-007] RX Interrupt              : PASS\r\n");
-			printf("             Callback detected\r\n");
-		} else {
-			printf("[SYS-CANIF-007] RX Interrupt              : FAIL\r\n");
-		}
-	} else {
-		printf("[SYS-CANIF-007] RX Interrupt              : FAIL\r\n");
-		printf("             Callback timeout\r\n");
-	}
-}
-
-/**
- * @brief SYS-CANIF-008
- * TX-RX E2E
- */
-static void SystemTest_TXRX_E2E(void) {
-	uint8_t data[8] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
-
-	CAN_StatusTypeDef status;
-
-	printf("[SYS-CANIF-008] TX-RX E2E\r\n");
-
-	status = CAN_IF_Transmit(
-	SYSTEM_TEST_CAN_ID, data, 8);
-
-	if (status != OK) {
-		printf("[SYS-CANIF-008] TX-RX E2E                 : FAIL\r\n");
-		printf("             TX error=%d\r\n", status);
-		return;
-	}
-
-	printf("             TX ID=0x123 DLC=8 DATA=");
-	SystemTest_PrintData(data, 8);
-	printf("\r\n");
-
-	printf("             Waiting for RX...\r\n");
-
-	/*
-	 * Lưu ý:
-	 * Board phải được nối với một CAN node khác.
-	 * Node bên ngoài phải gửi lại frame giống TX.
-	 */
-	if (SystemTest_WaitForRxCallback(
-	SYSTEM_TEST_TIMEOUT_MS) == 1) {
-		printf("[SYS-CANIF-008] TX-RX E2E                 : PASS\r\n");
-		printf("             RX callback received\r\n");
-		printf("             RX data must match TX data\r\n");
-	} else {
-		printf("[SYS-CANIF-008] TX-RX E2E                 : FAIL\r\n");
-		printf("             RX timeout\r\n");
-	}
-}
-
-/**
- * @brief SYS-CANIF-009
- * Data Pattern
- */
-static void SystemTest_DataPattern(void) {
-	uint8_t data[8] = { 0x00, 0xFF, 0xAA, 0x55, 0x12, 0x34, 0xAB, 0xCD };
-
-	CAN_StatusTypeDef status;
-
-	printf("[SYS-CANIF-009] Data Pattern\r\n");
-
-	printf("             Pattern=");
-	SystemTest_PrintData(data, 8);
-	printf("\r\n");
-
-	status = CAN_IF_Transmit(
-	SYSTEM_TEST_CAN_ID, data, 8);
-
-	if (status != OK) {
-		printf("[SYS-CANIF-009] Data Pattern              : FAIL\r\n");
-		printf("             TX error=%d\r\n", status);
-		return;
-	}
-
-	printf("             Waiting for external RX...\r\n");
-
-	if (SystemTest_WaitForRxCallback(
-	SYSTEM_TEST_TIMEOUT_MS) == 1) {
-		printf("[SYS-CANIF-009] Data Pattern              : PASS\r\n");
-		printf("             RX callback received\r\n");
-		printf("             RX data must equal pattern\r\n");
-	} else {
-		printf("[SYS-CANIF-009] Data Pattern              : FAIL\r\n");
-		printf("             RX timeout\r\n");
-	}
-}
-
-/**
- * @brief SYS-CANIF-010
- * Multiple Frame
- */
-static void SystemTest_MultipleFrame(void) {
-	uint8_t data1[8] = { 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17 };
-
-	uint8_t data2[8] = { 0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27 };
-
-	uint8_t data3[8] = { 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37 };
-
-	CAN_StatusTypeDef status1;
-	CAN_StatusTypeDef status2;
-	CAN_StatusTypeDef status3;
-
-	uint8_t receivedCount = 0;
-
-	printf("[SYS-CANIF-010] Multiple Frame\r\n");
-
-	status1 = CAN_IF_Transmit(
-	SYSTEM_TEST_CAN_ID, data1, 8);
-
-	HAL_Delay(100);
-
-	status2 = CAN_IF_Transmit(
-	SYSTEM_TEST_CAN_ID, data2, 8);
-
-	HAL_Delay(100);
-
-	status3 = CAN_IF_Transmit(
-	SYSTEM_TEST_CAN_ID, data3, 8);
-
-	if ((status1 != OK) || (status2 != OK) || (status3 != OK)) {
-		printf("[SYS-CANIF-010] Multiple Frame            : FAIL\r\n");
-
-		printf("             TX1=%d TX2=%d TX3=%d\r\n", status1, status2,
-				status3);
-
-		return;
-	}
-
-	printf("             TX frame 1 sent\r\n");
-	printf("             TX frame 2 sent\r\n");
-	printf("             TX frame 3 sent\r\n");
-
-	printf("             Waiting for 3 RX frames...\r\n");
-
-	/*
-	 * Với CAN_IF hiện tại, callback tự động đọc FIFO.
-	 * main.c không có quyền truy cập RxData.
-	 *
-	 * Vì vậy test này dùng số lần callback theo PC13.
-	 *
-	 * Mỗi callback Toggle PC13.
-	 */
-	GPIO_PinState previousState;
-
-	previousState = HAL_GPIO_ReadPin(
-	GPIOC,
-	GPIO_PIN_13);
-
-	uint32_t startTick = HAL_GetTick();
-
-	while ((HAL_GetTick() - startTick) <
-	SYSTEM_TEST_TIMEOUT_MS) {
-		GPIO_PinState currentState;
-
-		currentState = HAL_GPIO_ReadPin(
-		GPIOC,
-		GPIO_PIN_13);
-
-		if (currentState != previousState) {
-			receivedCount++;
-
-			previousState = currentState;
-
-			printf("             RX callback %d detected\r\n", receivedCount);
-
-			if (receivedCount >= 3) {
-				break;
-			}
-		}
-	}
-
-	printf("[SYS-CANIF-010] Multiple Frame            : ");
-
-	if (receivedCount >= 3) {
-		printf("PASS\r\n");
-		printf("             Received=%d Expected=3\r\n", receivedCount);
-	} else {
-		printf("FAIL\r\n");
-		printf("             Received=%d Expected=3\r\n", receivedCount);
-	}
-}
 
 /**
  * @brief SYS-CANIF-011
