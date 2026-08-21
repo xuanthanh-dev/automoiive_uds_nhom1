@@ -1,4 +1,6 @@
 #include "Can_if.h"
+#include <string.h>
+
 extern CAN_HandleTypeDef hcan;
 /* Private Variables cho CAN */
 static CAN_TxHeaderTypeDef TxHeader;
@@ -56,8 +58,6 @@ void CAN_IF_Init(void) {
  */
 CAN_StatusTypeDef CAN_IF_Transmit(uint16_t stdId, uint8_t *pData, uint8_t len) {
 	CAN_StatusTypeDef errorCode = OK;
-	HAL_StatusTypeDef halStatus = HAL_OK;
-
 	if (stdId > 0x7FFU) {
 		errorCode = ERROR_INVALID_ID;
 	}
@@ -74,7 +74,7 @@ CAN_StatusTypeDef CAN_IF_Transmit(uint16_t stdId, uint8_t *pData, uint8_t len) {
 		TxHeader.RTR = CAN_RTR_DATA;
 		TxHeader.DLC = len;
 
-		halStatus = HAL_CAN_AddTxMessage(&hcan, &TxHeader, pData, &TxMailbox);
+		HAL_StatusTypeDef  halStatus = HAL_CAN_AddTxMessage(&hcan, &TxHeader, pData, &TxMailbox);
 		if (halStatus != HAL_OK) {
 			errorCode = ERROR_TRANSMIT;
 		}
@@ -89,8 +89,39 @@ uint32_t CAN_IF_HandleTxError(void) {
 	uint32_t error = HAL_CAN_GetError(&hcan);
 	return error;
 }
+/**
+ * @brief Hàm hủy khởi tạo CAN-IF
+ */
+void CAN_IF_DeInit(void)
+{
+    /* Stop CAN if it is running */
+    if ((hcan.State == HAL_CAN_STATE_READY) ||
+        (hcan.State == HAL_CAN_STATE_LISTENING))
+    {
+        HAL_CAN_Stop(&hcan);
+    }
 
+    /* Deactivate CAN notifications */
+    HAL_CAN_DeactivateNotification(
+        &hcan,
+        CAN_IT_RX_FIFO0_MSG_PENDING |
+        CAN_IT_RX_FIFO1_MSG_PENDING |
+        CAN_IT_ERROR |
+        CAN_IT_BUSOFF |
+        CAN_IT_ERROR_WARNING |
+        CAN_IT_ERROR_PASSIVE
+    );
 
+    /* Reset CAN-IF internal variables */
+    memset(&TxHeader, 0, sizeof(TxHeader));
+    memset(&RxHeader, 0, sizeof(RxHeader));
+    memset(RxData, 0, sizeof(RxData));
+
+    TxMailbox = 0U;
+
+    /* Deinitialize CAN peripheral */
+    HAL_CAN_DeInit(&hcan);
+}
 /**
  * @brief Lay frame CAN da nhan
  */
