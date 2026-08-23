@@ -57,7 +57,7 @@
 /* External variables --------------------------------------------------------*/
 extern CAN_HandleTypeDef hcan;
 /* USER CODE BEGIN EV */
-
+extern UART_HandleTypeDef huart1;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -225,7 +225,10 @@ void CAN1_RX1_IRQHandler(void)
 
   /* USER CODE END CAN1_RX1_IRQn 1 */
 }
-
+void USART1_IRQHandler(void)
+{
+    HAL_UART_IRQHandler(&huart1);
+}
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
