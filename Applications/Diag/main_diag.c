@@ -1,4 +1,3 @@
-/* Diagnostic tester. UART1: 115200-8-N-1, TX=PA9, RX=PA10. */
 #include "main.h"
 #include "Can_if.h"
 #include <stdio.h>
@@ -43,6 +42,8 @@ static uint8_t diagSelectedTest;
 static uint8_t diagRunAll;
 static uint32_t diagRequestTimeMs;
 static uint32_t diagNextActionMs;
+static volatile uint8_t diagUartKey;
+static volatile uint8_t diagUartKeyReady = 0U;
 
 static void SystemClock_Config(void);
 static void MX_USART1_UART_Init(void);
@@ -63,23 +64,52 @@ static uint8_t Diag_SendCan(uint16_t canId, const uint8_t *data, uint8_t dlc);
 int main(void)
 {
     HAL_Init();
+
     SystemClock_Config();
+
     MX_USART1_UART_Init();
+
     CAN_IF_Init();
 
+    /* Start UART RX interrupt */
+    if (HAL_UART_Receive_IT(&huart1, &diagUartKey, 1U) != HAL_OK)
+    {
+        Error_Handler();
+    }
+
     printf("\r\n========== DIAG TESTER READY ==========\r\n");
+
     printf("CAN: request 0x%03X, response 0x%03X, bitrate 125 kbit/s\r\n",
-           DIAG_CAN_ID_REQUEST, DIAG_CAN_ID_RESPONSE);
+           DIAG_CAN_ID_REQUEST,
+           DIAG_CAN_ID_RESPONSE);
+
     Diag_PrintMenu();
 
     while (1)
     {
         uint32_t now = HAL_GetTick();
+
+        /* Process CAN */
         Diag_ProcessCan(now);
-        Diag_HandleUart();
+
+        /* Check diagnostic timeout */
         Diag_CheckTimeout(now);
 
-        if ((diagRunAll != 0U) && (diagWaitingResponse == 0U) &&
+        /*
+         * UART is handled by interrupt:
+         *
+         * USART1_IRQHandler()
+         *      -> HAL_UART_IRQHandler()
+         *          -> HAL_UART_RxCpltCallback()
+         *
+         * Therefore:
+         * Diag_HandleUart();
+         *
+         * is NO LONGER needed here.
+         */
+
+        if ((diagRunAll != 0U) &&
+            (diagWaitingResponse == 0U) &&
             ((int32_t)(now - diagNextActionMs) >= 0))
         {
             if (diagSelectedTest < DIAG_TEST_COUNT)
@@ -89,7 +119,9 @@ int main(void)
             else
             {
                 diagRunAll = 0U;
+
                 printf("\r\n========== ALL TESTS FINISHED ==========\r\n");
+
                 Diag_PrintMenu();
             }
         }
@@ -106,38 +138,15 @@ static void Diag_PrintMenu(void)
     printf("  9: ST-010/ST-011 Read DTC   A: Chay tat ca\r\n> ");
 }
 
-static void Diag_HandleUart(void)
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    uint8_t key;
-    if (HAL_UART_Receive(&huart1, &key, 1U, 1U) == HAL_OK)
+    if (huart->Instance == USART1)
     {
-        if ((key >= '1') && (key <= '9'))
-        {
-            if (diagWaitingResponse != 0U)
-            {
-                printf("\r\nDIAG dang cho response, hay doi...\r\n");
-            }
-            else
-            {
-                diagRunAll = 0U;
-                Diag_StartTest((uint8_t)(key - '1'));
-            }
-        }
-        else if ((key == 'A') || (key == 'a'))
-        {
-            if (diagWaitingResponse == 0U)
-            {
-                printf("\r\nDIAG: chay toan bo system test.\r\n");
-                diagRunAll = 1U;
-                diagSelectedTest = 0U;
-                diagNextActionMs = HAL_GetTick();
-            }
-        }
-        else if ((key != '\r') && (key != '\n'))
-        {
-            printf("\r\nLua chon khong hop le.\r\n");
-            Diag_PrintMenu();
-        }
+        diagUartKeyReady = 1U;
+
+        HAL_UART_Receive_IT(&huart1,
+                           (uint8_t *)&diagUartKey,
+                           1U);
     }
 }
 
@@ -401,6 +410,40 @@ int __io_putchar(int ch)
     uint8_t character = (uint8_t)ch;
     (void)HAL_UART_Transmit(&huart1, &character, 1U, HAL_MAX_DELAY);
     return ch;
+}
+
+//#ifdef __GNUC__
+//int __io_putchar(int ch)
+//#else
+//int fputc(int ch, FILE *f)
+//#endif
+//{
+//    HAL_UART_Transmit(&huart1,
+//                      (uint8_t *)&ch,
+//                      1,
+//                      HAL_MAX_DELAY);
+//
+//    return ch;
+//}
+
+void uartlog(char *message)
+{
+    HAL_UART_Transmit(&huart1,
+                      (uint8_t *)message,
+                      strlen(message),
+                      HAL_MAX_DELAY);
+}
+void blink_led(void)
+{
+    HAL_GPIO_WritePin(GPIOA,
+                      GPIO_PIN_5,
+                      GPIO_PIN_SET);
+
+    HAL_Delay(2000);
+
+    HAL_GPIO_WritePin(GPIOA,
+                      GPIO_PIN_5,
+                      GPIO_PIN_RESET);
 }
 
 void Error_Handler(void) { __disable_irq(); while (1) {} }

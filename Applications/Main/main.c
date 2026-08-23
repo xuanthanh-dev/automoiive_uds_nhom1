@@ -2,7 +2,7 @@
 #include "main.h"
 #include "Can_if.h"
 #include <stdio.h>
-
+#include <string.h>
 #define DIAG_CAN_ID_REQUEST       0x7E0U
 #define DIAG_CAN_ID_RESPONSE      0x7E8U
 #define DIAG_CAN_ID_ENGINE_STATUS 0x100U
@@ -43,8 +43,10 @@ static uint8_t diagSelectedTest;
 static uint8_t diagRunAll;
 static uint32_t diagRequestTimeMs;
 static uint32_t diagNextActionMs;
+static volatile uint8_t diagUartKey;
+static volatile uint8_t diagUartKeyReady = 0U;
 
-static void SystemClock_Config(void);
+void SystemClock_Config(void);
 static void MX_USART1_UART_Init(void);
 static void Diag_PrintMenu(void);
 static void Diag_PrintHex(const uint8_t *data, uint16_t length);
@@ -60,41 +62,283 @@ static uint8_t Diag_IsResponseExpected(uint8_t testIndex,
 static void Diag_SendFlowControl(void);
 static uint8_t Diag_SendCan(uint16_t canId, const uint8_t *data, uint8_t dlc);
 
+
 int main(void)
 {
+    uint32_t now;
+
+    /* =========================================================
+     * 1. HAL initialization
+     * ========================================================= */
     HAL_Init();
+
+    /* =========================================================
+     * 2. System clock
+     * ========================================================= */
     SystemClock_Config();
+
+    /* =========================================================
+     * 3. Peripheral initialization
+     * ========================================================= */
     MX_USART1_UART_Init();
+
+    /*
+     * Initialize CAN interface
+     */
     CAN_IF_Init();
 
-    printf("\r\n========== DIAG TESTER READY ==========\r\n");
-    printf("CAN: request 0x%03X, response 0x%03X, bitrate 125 kbit/s\r\n",
-           DIAG_CAN_ID_REQUEST, DIAG_CAN_ID_RESPONSE);
+    /*
+     * LED báo MCU đã khởi động
+     */
+    blink_led();
+
+    /* =========================================================
+     * 4. Start UART1 RX interrupt
+     *
+     * Nhận từng byte từ Serial Debug.
+     * Ví dụ:
+     *
+     * PC gửi '1'
+     *       ↓
+     * USART1 RX
+     *       ↓
+     * HAL_UART_RxCpltCallback()
+     * =========================================================
+     */
+    printf("[DEBUG] Start UART RX\r\n");
+
+    HAL_UART_Receive_IT(&huart1,
+                               (uint8_t *)&diagUartKey,
+                               1U);
+    printf("[DEBUG] RX: '%c' 0x%02X\r\n",
+           diagUartKey,
+           diagUartKey);
+//    if (HAL_UART_Receive_IT(&huart1,
+//                           (uint8_t *)&diagUartKey,
+//                           1U) != HAL_OK)
+//    {
+//        Error_Handler();
+//    }
+
+    /* =========================================================
+     * 5. Diagnostic Tester startup message
+     * ========================================================= */
+    printf("\r\n");
+    printf("========================================\r\n");
+    printf("        DIAGNOSTIC TESTER READY\r\n");
+    printf("========================================\r\n");
+
+    printf("UART1 : 115200 8-N-1\r\n");
+
+    printf("CAN Request  : 0x%03X\r\n",
+           DIAG_CAN_ID_REQUEST);
+
+    printf("CAN Response : 0x%03X\r\n",
+           DIAG_CAN_ID_RESPONSE);
+
+    printf("========================================\r\n");
+
+    /*
+     * Hiển thị menu DIAG
+     */
     Diag_PrintMenu();
 
+    /* =========================================================
+     * 6. Main loop
+     * ========================================================= */
     while (1)
     {
-        uint32_t now = HAL_GetTick();
-        Diag_ProcessCan(now);
-        Diag_HandleUart();
-        Diag_CheckTimeout(now);
+//        now = HAL_GetTick();
+//        /* Process CAN */
+//        Diag_ProcessCan(now);
+//
+//        /* Check diagnostic timeout */
+//        Diag_CheckTimeout(now);
+//        /* =====================================================
+//         * UART RX processing
+//         * ===================================================== */
+//        if (diagUartKeyReady != 0U)
+//        {
+//            uint8_t key;
+//
+//            /*
+//             * Copy byte nhận được
+//             */
+//            key = diagUartKey;
+//
+//            /*
+//             * Clear flag
+//             */
+//            diagUartKeyReady = 0U;
+//
+//            /*
+//             * Debug:
+//             * hiển thị ký tự và mã HEX nhận được
+//             *
+//             * Ví dụ gửi '1':
+//             *
+//             * UART RX = '1' 0x31
+//             */
+//            printf("\r\nUART RX = '%c' (0x%02X)\r\n",
+//                   key,
+//                   key);
+//
+//            /* =================================================
+//             * Nhận phím 1 -> 9
+//             * ================================================= */
+//            if ((key >= '1') && (key <= '9'))
+//            {
+//                /*
+//                 * Không cho chạy test mới nếu đang
+//                 * chờ CAN response.
+//                 */
+//                if (diagWaitingResponse != 0U)
+//                {
+//                    printf("DIAG dang cho CAN response...\r\n");
+//                }
+//                else
+//                {
+//                    /*
+//                     * '1' -> index 0
+//                     * '2' -> index 1
+//                     * ...
+//                     * '9' -> index 8
+//                     */
+//                    diagRunAll = 0U;
+//
+//                    diagSelectedTest =
+//                        (uint8_t)(key - '1');
+//
+//                    printf("Starting DIAG TEST %d...\r\n",
+//                           diagSelectedTest + 1U);
+//
+//                    Diag_StartTest(diagSelectedTest);
+//                }
+//            }
+//
+//            /* =================================================
+//             * Nhận A hoặc a -> chạy toàn bộ test
+//             * ================================================= */
+//            else if ((key == 'A') || (key == 'a'))
+//            {
+//                if (diagWaitingResponse == 0U)
+//                {
+//                    printf("\r\n");
+//                    printf("DIAG: CHAY TOAN BO SYSTEM TEST\r\n");
+//
+//                    diagRunAll = 1U;
+//
+//                    diagSelectedTest = 0U;
+//
+//                    diagNextActionMs = now;
+//                }
+//                else
+//                {
+//                    printf("DIAG dang cho CAN response...\r\n");
+//                }
+//            }
+//
+//            /* =================================================
+//             * Bỏ qua Enter / Newline
+//             * ================================================= */
+//            else if ((key == '\r') || (key == '\n'))
+//            {
+//                /*
+//                 * Không làm gì.
+//                 *
+//                 * Serial terminal thường gửi:
+//                 * '1' + '\r' + '\n'
+//                 */
+//            }
+//
+//            /* =================================================
+//             * Ký tự không hợp lệ
+//             * ================================================= */
+//            else
+//            {
+//                printf("Lua chon khong hop le!\r\n");
+//
+//                Diag_PrintMenu();
+//            }
+//        }
+//
+//        /* =====================================================
+//         * CAN processing
+//         * ===================================================== */
+//
+//        Diag_ProcessCan(now);
+//
+//        /* =====================================================
+//         * CAN timeout processing
+//         * ===================================================== */
+//
+//        Diag_CheckTimeout(now);
+//
+//        /* =====================================================
+//         * RUN ALL TEST
+//         * ===================================================== */
+//
+//        if ((diagRunAll != 0U) &&
+//            (diagWaitingResponse == 0U) &&
+//            ((int32_t)(now - diagNextActionMs) >= 0))
+//        {
+//            /*
+//             * Còn test để chạy
+//             */
+//            if (diagSelectedTest < DIAG_TEST_COUNT)
+//            {
+//                Diag_StartTest(diagSelectedTest);
+//            }
+//            else
+//            {
+//                /*
+//                 * Đã chạy xong toàn bộ test
+//                 */
+//                diagRunAll = 0U;
+//
+//                printf("\r\n");
+//                printf("========================================\r\n");
+//                printf("       ALL TESTS FINISHED\r\n");
+//                printf("========================================\r\n");
+//
+//                Diag_PrintMenu();
+//            }
+//        }
 
-        if ((diagRunAll != 0U) && (diagWaitingResponse == 0U) &&
-            ((int32_t)(now - diagNextActionMs) >= 0))
-        {
-            if (diagSelectedTest < DIAG_TEST_COUNT)
-            {
-                Diag_StartTest(diagSelectedTest);
-            }
-            else
-            {
-                diagRunAll = 0U;
-                printf("\r\n========== ALL TESTS FINISHED ==========\r\n");
-                Diag_PrintMenu();
-            }
-        }
+    	if (diagUartKeyReady != 0U)
+    	{
+    	    diagUartKeyReady = 0U;
+
+    	    printf("[DEBUG] RX: '%c' 0x%02X\r\n",
+    	           diagUartKey,
+    	           diagUartKey);
+
+    	    if (diagUartKey == '1')
+    	    {
+    	        printf("[DEBUG] KEY 1 DETECTED\r\n");
+    	    }
+
+    	    HAL_UART_Receive_IT(&huart1,
+    	                       (uint8_t *)&diagUartKey,
+    	                       1U);
+    	}
     }
 }
+
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1)
+    {
+        diagUartKeyReady = 1U;
+        blink_led();
+        /* Re-arm UART RX interrupt */
+//        HAL_UART_Receive_IT(&huart1,
+//                           (uint8_t *)&diagUartKey,
+//                           1U);
+    }
+}
+
 
 static void Diag_PrintMenu(void)
 {
@@ -106,26 +350,6 @@ static void Diag_PrintMenu(void)
     printf("  9: ST-010/ST-011 Read DTC   A: Chay tat ca\r\n> ");
 }
 
-static void Diag_HandleUart(void)
-{
-    uint8_t key;
-
-    if (HAL_UART_Receive(&huart1, &key, 1U, 10U) == HAL_OK)
-    {
-        printf("\r\n[UART RX] Received: 0x%02X\r\n", key);
-
-        if ((key >= '1') && (key <= '9'))
-        {
-            printf("[UART RX] Test = %c\r\n", key);
-
-            if (diagWaitingResponse == 0U)
-            {
-                diagRunAll = 0U;
-                Diag_StartTest((uint8_t)(key - '1'));
-            }
-        }
-    }
-}
 
 static void Diag_StartTest(uint8_t testIndex)
 {
@@ -367,26 +591,70 @@ static void MX_USART1_UART_Init(void)
     if (HAL_UART_Init(&huart1) != HAL_OK) Error_Handler();
 }
 
-static void SystemClock_Config(void)
-{
-    RCC_OscInitTypeDef osc = {0}; RCC_ClkInitTypeDef clk = {0};
-    osc.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-    osc.HSEState = RCC_HSE_ON; osc.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
-    osc.HSIState = RCC_HSI_ON; osc.PLL.PLLState = RCC_PLL_ON;
-    osc.PLL.PLLSource = RCC_PLLSOURCE_HSE; osc.PLL.PLLMUL = RCC_PLL_MUL9;
-    if (HAL_RCC_OscConfig(&osc) != HAL_OK) Error_Handler();
-    clk.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
-                    RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-    clk.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK; clk.AHBCLKDivider = RCC_SYSCLK_DIV1;
-    clk.APB1CLKDivider = RCC_HCLK_DIV2; clk.APB2CLKDivider = RCC_HCLK_DIV1;
-    if (HAL_RCC_ClockConfig(&clk, FLASH_LATENCY_2) != HAL_OK) Error_Handler();
+void SystemClock_Config(void) {
+	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
+	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
+
+	/** Initializes the RCC Oscillators according to the specified parameters
+	 * in the RCC_OscInitTypeDef structure.
+	 */
+	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+	RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+	RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
+	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+	RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+		Error_Handler();
+	}
+
+	/** Initializes the CPU, AHB and APB buses clocks
+	 */
+	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
+			| RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
+		Error_Handler();
+	}
 }
 
+
+#ifdef __GNUC__
 int __io_putchar(int ch)
+#else
+int fputc(int ch, FILE *f)
+#endif
 {
-    uint8_t character = (uint8_t)ch;
-    (void)HAL_UART_Transmit(&huart1, &character, 1U, HAL_MAX_DELAY);
-    return ch;
+	HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1,
+	HAL_MAX_DELAY);
+
+	return ch;
 }
+
+void uartlog(char *message)
+{
+    HAL_UART_Transmit(&huart1,
+                      (uint8_t *)message,
+                      strlen(message),
+                      HAL_MAX_DELAY);
+}
+void blink_led(void)
+{
+    HAL_GPIO_WritePin(GPIOA,
+                      GPIO_PIN_5,
+                      GPIO_PIN_SET);
+
+    HAL_Delay(2000);
+
+    HAL_GPIO_WritePin(GPIOA,
+                      GPIO_PIN_5,
+                      GPIO_PIN_RESET);
+}
+
 
 void Error_Handler(void) { __disable_irq(); while (1) {} }
