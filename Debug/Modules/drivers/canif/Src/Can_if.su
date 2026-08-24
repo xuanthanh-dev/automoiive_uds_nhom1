@@ -1,0 +1,6 @@
+../Modules/drivers/canif/Src/Can_if.c:16:6:CAN_IF_Init	8	static
+../Modules/drivers/canif/Src/Can_if.c:57:19:CAN_IF_Transmit	24	static
+../Modules/drivers/canif/Src/Can_if.c:88:10:CAN_IF_HandleTxError	16	static
+../Modules/drivers/canif/Src/Can_if.c:97:19:CAN_IF_GetReceivedFrame	32	static
+../Modules/drivers/canif/Src/Can_if.c:128:19:CAN_IF_ProcessRxInterrupt	16	static
+../Modules/drivers/canif/Src/Can_if.c:143:6:HAL_CAN_RxFifo1MsgPendingCallback	16	static
