@@ -117,10 +117,7 @@ int main(void)
     /*
      * Initialize CAN interface.
      */
-    if (CAN_IF_Init() != OK)
-    {
-        Error_Handler();
-    }
+    CAN_IF_Init();
 
     /*
      * Initial engine status transmission.
