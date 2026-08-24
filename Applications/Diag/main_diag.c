@@ -777,6 +777,11 @@ static void Diag_StartTest(
     }
     else
     {
+        printf(
+            "[DIAG][%s] FAIL - CAN transmit error\r\n",
+            diagTests[testIndex].id
+        );
+
         if (diagRunAll != 0U)
         {
             diagSelectedTest++;
@@ -1312,6 +1317,13 @@ static void Diag_CompleteResponse(void)
             diagResponseLength
         );
 
+    printf(
+        "[DIAG][%s] %s\r\n",
+        diagTests[diagSelectedTest].id,
+        (passed != 0U) ?
+        "PASS" :
+        "FAIL"
+    );
 
     /* ========================================================
      * ST-010 / ST-011
@@ -1615,6 +1627,11 @@ static void Diag_CheckTimeout(
         ((now - diagRequestTimeMs) >
          DIAG_RESPONSE_TIMEOUT_MS))
     {
+        printf(
+            "[DIAG][%s] FAIL - timeout "
+            "waiting ECU response\r\n",
+            diagTests[diagSelectedTest].id
+        );
 
         diagWaitingResponse = 0U;
 
