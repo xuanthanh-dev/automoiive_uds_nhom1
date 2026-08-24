@@ -1,9 +1,0 @@
-../Modules/app/app_engine.c:62:13:AppEngine_EncodeStatus	16	static
-../Modules/app/app_engine.c:87:13:AppEngine_LogTx	232	static
-../Modules/app/app_engine.c:124:6:AppEngine_Init	8	static
-../Modules/app/app_engine.c:154:22:AppEngine_MainFunction	24	static
-../Modules/app/app_engine.c:192:22:AppEngine_SendStatus	24	static
-../Modules/app/app_engine.c:240:22:AppEngine_SetStatus	24	static
-../Modules/app/app_engine.c:276:22:AppEngine_GetStatus	24	static
-../Modules/app/app_engine.c:312:6:AppEngine_ShowStatus	168	static
-../Modules/app/app_engine.c:366:6:AppEngine_ShowMenu	8	static
