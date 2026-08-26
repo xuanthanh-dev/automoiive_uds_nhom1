@@ -108,20 +108,6 @@ AppEngine_ReturnType AppEngine_GetSignals(
     const AppEngine_ContextType *context,
     AppEngine_SignalsType *signals);
 
-/**
- * @brief Force simulated signals manually.
- *
- * Automatic simulation is suspended after this call.
- */
-AppEngine_ReturnType AppEngine_SetSignals(
-    AppEngine_ContextType *context,
-    const AppEngine_SignalsType *signals);
-
-/**
- * @brief Resume automatic simulation.
- */
-AppEngine_ReturnType AppEngine_ResumeSimulation(
-    AppEngine_ContextType *context);
 
 /* ============================================================
  * FAULT EVALUATION API

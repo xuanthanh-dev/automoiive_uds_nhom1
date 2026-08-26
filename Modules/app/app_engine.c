@@ -77,6 +77,14 @@ typedef struct
  * ============================================================ */
 
 static AppEngine_EcuContextType appEngineEcu;
+static void AppEngine_PrintHex(const uint8_t *data, uint16_t length);
+static void AppEngine_DeriveSignals(AppEngine_ContextType *context);
+static void AppEngine_AdvanceRamp(AppEngine_ContextType *context);
+static CAN_StatusTypeDef AppEngine_CanSend(const uint8_t *frame, uint8_t length);
+static void AppEngine_UpdateDtcStatus(void);
+static void AppEngine_UdsRxCallback(const uint8_t *request, uint16_t length);
+static void AppEngine_ProcessCanRx(uint32_t currentTimeMs);
+static void AppEngine_HandlePendingReset(void);
 
 /* ============================================================
  * HEX DEBUG PRINT
@@ -734,68 +742,6 @@ AppEngine_ReturnType AppEngine_GetSignals(
     return APP_E_OK;
 }
 
-/* ============================================================
- * SET SIGNALS
- * ============================================================ */
-
-AppEngine_ReturnType AppEngine_SetSignals(
-    AppEngine_ContextType *context,
-    const AppEngine_SignalsType *signals)
-{
-    if ((context == 0) ||
-        (signals == 0))
-    {
-        return APP_E_NULL_PTR;
-    }
-
-    if (context->initialised == 0U)
-    {
-        return APP_E_NOT_INIT;
-    }
-
-    context->signals.vehicleSpeedKmh =
-        signals->vehicleSpeedKmh;
-
-    context->signals.engineSpeedRpm =
-        signals->engineSpeedRpm;
-
-    context->signals.engineTempCelsius =
-        signals->engineTempCelsius;
-
-    context->signals.batteryVoltageDeciV =
-        signals->batteryVoltageDeciV;
-
-    /*
-     * Suspend automatic simulation.
-     */
-    context->manualOverrideActive =
-        1U;
-
-    return APP_E_OK;
-}
-
-/* ============================================================
- * RESUME SIMULATION
- * ============================================================ */
-
-AppEngine_ReturnType AppEngine_ResumeSimulation(
-    AppEngine_ContextType *context)
-{
-    if (context == 0)
-    {
-        return APP_E_NULL_PTR;
-    }
-
-    if (context->initialised == 0U)
-    {
-        return APP_E_NOT_INIT;
-    }
-
-    context->manualOverrideActive =
-        0U;
-
-    return APP_E_OK;
-}
 
 /* ============================================================
  * OVER TEMPERATURE

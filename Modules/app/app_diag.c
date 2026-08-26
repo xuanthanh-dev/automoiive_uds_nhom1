@@ -1,7 +1,14 @@
-/**
- * @file app_diag.c
- * @brief Diagnostic Tool application implementation.
- */
+/*----------------------------------------------------------------------------
+ * Diagnostic Tester application integration
+ *
+ * Transport responsibility:
+ *   AppDiag -> ISO-TP -> CAN_IF
+ *
+ * ISO-TP is intentionally not reimplemented here.  IsoTp_OnCanFrame()
+ * consumes CAN frames and IsoTp_MainFunction() handles CF timing and
+ * transport timeouts.  When a complete UDS response is available,
+ * AppDiag_IsoTpRxCallback() is called.
+ *----------------------------------------------------------------------------*/
 
 #include "app_diag.h"
 #include "main.h"
@@ -24,7 +31,58 @@
 #define APP_DIAG_NEGATIVE_SID        (0x7FU)
 #define APP_DIAG_SOFT_RESET          (0x03U)
 #define APP_DIAG_DTC_BY_STATUS_MASK  (0x02U)
+#define DIAG_CAN_ID_REQUEST       (0x7E0U)
+#define DIAG_CAN_ID_RESPONSE      (0x7E8U)
+#define DIAG_RESPONSE_TIMEOUT_MS  (10000U)
 
+static const Diag_DidItemType diagDidItems[] =
+{
+    { DID_VIN,                "VIN" },
+    { DID_SOFTWARE_VERSION,   "SW Info" },
+    { DID_VEHICLE_SPEED,      "Vehicle Speed" },
+    { DID_ENGINE_SPEED,       "Engine RPM" },
+    { DID_ENGINE_TEMPERATURE, "Engine Temp" },
+    { DID_BATTERY_VOLTAGE,    "Battery Voltage" }
+};
+
+#define DIAG_DID_ITEM_COUNT \
+    ((uint8_t)(sizeof(diagDidItems) / sizeof(diagDidItems[0])))
+
+extern UART_HandleTypeDef huart1;
+
+static AppDiag_ContextType diagApp;
+static Diag_MenuType diagMenu;
+static Diag_ActionType diagAction;
+static uint16_t diagCurrentDid;
+static uint8_t diagEngineStep;
+static uint8_t diagWaitingResponse;
+static uint32_t diagRequestTimeMs;
+static uint32_t diagResetAtMs;
+static uint8_t diagResetPending;
+
+static volatile uint8_t diagUartRxByte;
+static volatile char diagUartCommand[8];
+static volatile uint8_t diagUartCommandIndex;
+static volatile uint8_t diagUartCommandReady;
+
+static void AppDiag_CopyBytes(uint8_t *destination, const uint8_t *source, uint16_t length);
+static AppDiag_ReturnType AppDiag_ValidatePrepare(const AppDiag_ContextType *context);
+static void AppDiag_CommitRequest(AppDiag_ContextType *context, const uint8_t *request, uint16_t requestLength);
+
+static void Diag_PrintSessionMenu(void);
+static void Diag_PrintDidMenu(void);
+static void Diag_StartAction(Diag_ActionType action, uint16_t did);
+static uint8_t Diag_PrepareAndSend(void);
+static void Diag_CheckTimeout(uint32_t now);
+static uint8_t Diag_SendCanFrame(const uint8_t *frame, uint8_t dlc);
+static void AppDiag_IsoTpRxCallback(const uint8_t *message, uint16_t length);
+static void Diag_CompleteResponse(const uint8_t *response, uint16_t length);
+static void Diag_PrintHex(const uint8_t *data, uint16_t length);
+static void Diag_PrintResponse(const uint8_t *response, uint16_t length);
+static void Diag_PrintDtcResponse(const uint8_t *response, uint16_t length);
+static void Diag_PrintDidResponse(const uint8_t *response, uint16_t length);
+static void Diag_PrintEngineStatusStep(const uint8_t *response, uint16_t length);
+static void Diag_StartNextEngineStatusRead(void);
 /**
  * @brief Copies one byte range.
  * @param destination Destination buffer.
@@ -445,66 +503,7 @@ AppDiag_ReturnType AppDiag_ClearResponse(AppDiag_ContextType *context)
     return result;
 }
 
-/*----------------------------------------------------------------------------
- * Diagnostic Tester application integration
- *
- * Transport responsibility:
- *   AppDiag -> ISO-TP -> CAN_IF
- *
- * ISO-TP is intentionally not reimplemented here.  IsoTp_OnCanFrame()
- * consumes CAN frames and IsoTp_MainFunction() handles CF timing and
- * transport timeouts.  When a complete UDS response is available,
- * AppDiag_IsoTpRxCallback() is called.
- *----------------------------------------------------------------------------*/
 
-#define DIAG_CAN_ID_REQUEST       (0x7E0U)
-#define DIAG_CAN_ID_RESPONSE      (0x7E8U)
-#define DIAG_RESPONSE_TIMEOUT_MS  (10000U)
-
-static const Diag_DidItemType diagDidItems[] =
-{
-    { DID_VIN,                "VIN" },
-    { DID_SOFTWARE_VERSION,   "SW Info" },
-    { DID_VEHICLE_SPEED,      "Vehicle Speed" },
-    { DID_ENGINE_SPEED,       "Engine RPM" },
-    { DID_ENGINE_TEMPERATURE, "Engine Temp" },
-    { DID_BATTERY_VOLTAGE,    "Battery Voltage" }
-};
-
-#define DIAG_DID_ITEM_COUNT \
-    ((uint8_t)(sizeof(diagDidItems) / sizeof(diagDidItems[0])))
-
-extern UART_HandleTypeDef huart1;
-
-static AppDiag_ContextType diagApp;
-static Diag_MenuType diagMenu;
-static Diag_ActionType diagAction;
-static uint16_t diagCurrentDid;
-static uint8_t diagEngineStep;
-static uint8_t diagWaitingResponse;
-static uint32_t diagRequestTimeMs;
-static uint32_t diagResetAtMs;
-static uint8_t diagResetPending;
-
-static volatile uint8_t diagUartRxByte;
-static volatile char diagUartCommand[8];
-static volatile uint8_t diagUartCommandIndex;
-static volatile uint8_t diagUartCommandReady;
-
-static void Diag_PrintSessionMenu(void);
-static void Diag_PrintDidMenu(void);
-static void Diag_StartAction(Diag_ActionType action, uint16_t did);
-static uint8_t Diag_PrepareAndSend(void);
-static void Diag_CheckTimeout(uint32_t now);
-static uint8_t Diag_SendCanFrame(const uint8_t *frame, uint8_t dlc);
-static void AppDiag_IsoTpRxCallback(const uint8_t *message, uint16_t length);
-static void Diag_CompleteResponse(const uint8_t *response, uint16_t length);
-static void Diag_PrintHex(const uint8_t *data, uint16_t length);
-static void Diag_PrintResponse(const uint8_t *response, uint16_t length);
-static void Diag_PrintDtcResponse(const uint8_t *response, uint16_t length);
-static void Diag_PrintDidResponse(const uint8_t *response, uint16_t length);
-static void Diag_PrintEngineStatusStep(const uint8_t *response, uint16_t length);
-static void Diag_StartNextEngineStatusRead(void);
 
 void AppDiag_TesterInit(void)
 {
@@ -765,9 +764,7 @@ static void Diag_StartAction(Diag_ActionType action, uint16_t did)
 
     diagAction = action;
     diagCurrentDid = did;
-    printf(
-        "\r\n[DEBUG] diagApp.state = %d\r\n",
-        (int)diagApp.state);
+
     switch (action)
     {
         case DIAG_ACTION_SESSION_DEFAULT:
@@ -979,6 +976,12 @@ static uint8_t Diag_SendCanFrame(
         return 1U;
     }
 
+    printf("[DIAG CAN TX] ID=0x%03X DLC=%u DATA=",
+           DIAG_CAN_ID_REQUEST,
+           dlc);
+    Diag_PrintHex(frame, dlc);
+    printf("\r\n");
+
     status = CAN_IF_Transmit(
         DIAG_CAN_ID_REQUEST,
         (uint8_t *)frame,
@@ -989,6 +992,7 @@ static uint8_t Diag_SendCanFrame(
         return 0U;
     }
 
+    printf("[DIAG CAN TX] ERROR=%d\r\n", (int)status);
     return 1U;
 }
 
@@ -998,6 +1002,7 @@ void Diag_ProcessCan(void)
     uint8_t frame[ISOTP_CAN_FRAME_SIZE];
     uint8_t dlc;
     uint32_t now;
+    IsoTp_StatusType isoStatus;
 
     now = HAL_GetTick();
 
@@ -1006,9 +1011,34 @@ void Diag_ProcessCan(void)
                frame,
                &dlc) == OK)
     {
+    	printf("[DIAG CAN RX] ID=0x%03lX DLC=%u "
+    	           "DATA=%02X %02X %02X %02X %02X %02X %02X %02X\r\n",
+    	           canId,
+    	           dlc,
+    	           frame[0],
+    	           frame[1],
+    	           frame[2],
+    	           frame[3],
+    	           frame[4],
+    	           frame[5],
+    	           frame[6],
+    	           frame[7]);
+
         if (canId == DIAG_CAN_ID_RESPONSE)
         {
-            (void)IsoTp_OnCanFrame(frame, dlc, now);
+        	printf("[DIAG CAN RX] -> ISO-TP\r\n");
+            isoStatus = IsoTp_OnCanFrame(frame, dlc, now);
+
+            if ((isoStatus != ISOTP_OK) && (isoStatus != ISOTP_BUSY))
+            {
+                printf("[DIAG ISO-TP] RX error=%d, detail=%d\r\n",
+                       (int)isoStatus,
+                       (int)IsoTp_GetLastError());
+            }
+        }
+        else
+        {
+            printf("[DIAG CAN RX] -> ignored ID\r\n");
         }
     }
 }
