@@ -1,8 +1,7 @@
 /**
- * @file app_diag.h
- * @brief Diagnostic Tool application request and response manager.
+ * @file    app_diag.h
+ * @brief   Diagnostic Tool application request/response and tester control.
  */
-
 #ifndef APP_DIAG_H
 #define APP_DIAG_H
 
@@ -10,10 +9,19 @@
 
 #define APP_DIAG_MAX_MESSAGE_LENGTH (64U)
 
-/** Return codes owned by App_Diag. */
+/*----------------------------------------------------------------------------
+ * Tester configuration
+ *--------------------------------------------------------------------------*/
+#define DIAG_CAN_ID_REQUEST         (0x7E0U)
+#define DIAG_CAN_ID_RESPONSE        (0x7E8U)
+#define DIAG_RESPONSE_TIMEOUT_MS    (10000U)
+
+/*----------------------------------------------------------------------------
+ * AppDiag return codes
+ *--------------------------------------------------------------------------*/
 typedef enum
 {
-    APP_DIAG_E_OK = 0,
+    APP_DIAG_E_OK = 0U,
     APP_DIAG_E_NULL_PTR,
     APP_DIAG_E_NOT_INITIALIZED,
     APP_DIAG_E_BUSY,
@@ -23,10 +31,12 @@ typedef enum
     APP_DIAG_E_NO_DATA
 } AppDiag_ReturnType;
 
-/** Request lifecycle states. */
+/*----------------------------------------------------------------------------
+ * Request lifecycle
+ *--------------------------------------------------------------------------*/
 typedef enum
 {
-    APP_DIAG_STATE_UNINITIALIZED = 0,
+    APP_DIAG_STATE_UNINITIALIZED = 0U,
     APP_DIAG_STATE_IDLE,
     APP_DIAG_STATE_REQUEST_READY,
     APP_DIAG_STATE_WAIT_RESPONSE,
@@ -34,7 +44,36 @@ typedef enum
     APP_DIAG_STATE_ERROR
 } AppDiag_StateType;
 
-/** Complete state of the Diagnostic Tool application. */
+/*----------------------------------------------------------------------------
+ * Tester UI/state types
+ *--------------------------------------------------------------------------*/
+typedef enum
+{
+    DIAG_MENU_MAIN = 0U,
+    DIAG_MENU_SESSION,
+    DIAG_MENU_DID
+} Diag_MenuType;
+
+typedef enum
+{
+    DIAG_ACTION_NONE = 0U,
+    DIAG_ACTION_SESSION_DEFAULT,
+    DIAG_ACTION_SESSION_EXTENDED,
+    DIAG_ACTION_RESET,
+    DIAG_ACTION_DTC,
+    DIAG_ACTION_DID_SINGLE,
+    DIAG_ACTION_ENGINE_STATUS
+} Diag_ActionType;
+
+typedef struct
+{
+    uint16_t did;
+    const char *name;
+} Diag_DidItemType;
+
+/*----------------------------------------------------------------------------
+ * Application context
+ *--------------------------------------------------------------------------*/
 typedef struct
 {
     AppDiag_StateType state;
@@ -48,107 +87,70 @@ typedef struct
     uint8_t initialized;
 } AppDiag_ContextType;
 
-/**
- * @brief Initializes a Diagnostic Tool application context.
- * @param context Caller-owned context storage.
- * @return APP_DIAG_E_OK or APP_DIAG_E_NULL_PTR.
- */
+/*----------------------------------------------------------------------------
+ * Request/response manager API
+ *--------------------------------------------------------------------------*/
 AppDiag_ReturnType AppDiag_Init(AppDiag_ContextType *context);
 
-/**
- * @brief Builds service 0x10 DiagnosticSessionControl.
- * @param context Initialized application context.
- * @param session Requested nonzero UDS session value.
- * @return APP_DIAG_E_OK or a validation/state error.
- */
-AppDiag_ReturnType AppDiag_PrepareSessionControl(AppDiag_ContextType *context,
-                                                 uint8_t session);
+AppDiag_ReturnType AppDiag_PrepareSessionControl(
+    AppDiag_ContextType *context,
+    uint8_t session);
 
-/**
- * @brief Builds service 0x11 with the supported soft-reset sub-function.
- * @param context Initialized application context.
- * @return APP_DIAG_E_OK or a validation/state error.
- */
-AppDiag_ReturnType AppDiag_PrepareSoftReset(AppDiag_ContextType *context);
+AppDiag_ReturnType AppDiag_PrepareSoftReset(
+    AppDiag_ContextType *context);
 
-/**
- * @brief Builds service 0x22 ReadDataByIdentifier.
- * @param context Initialized application context.
- * @param dataIdentifier Requested 16-bit DID.
- * @return APP_DIAG_E_OK or a validation/state error.
- */
-AppDiag_ReturnType AppDiag_PrepareReadDid(AppDiag_ContextType *context,
-                                          uint16_t dataIdentifier);
+AppDiag_ReturnType AppDiag_PrepareReadDid(
+    AppDiag_ContextType *context,
+    uint16_t dataIdentifier);
 
-/**
- * @brief Builds service 0x19 ReportDTCByStatusMask.
- * @param context Initialized application context.
- * @param statusMask Requested DTC status mask.
- * @return APP_DIAG_E_OK or a validation/state error.
- */
-AppDiag_ReturnType AppDiag_PrepareReadDtc(AppDiag_ContextType *context,
-                                          uint8_t statusMask);
+AppDiag_ReturnType AppDiag_PrepareReadDtc(
+    AppDiag_ContextType *context,
+    uint8_t statusMask);
 
-/**
- * @brief Builds service 0x3E TesterPresent.
- * @param context Initialized application context.
- * @param suppressResponse Zero for a response or one to suppress it.
- * @return APP_DIAG_E_OK or a validation/state error.
- */
-AppDiag_ReturnType AppDiag_PrepareTesterPresent(AppDiag_ContextType *context,
-                                                uint8_t suppressResponse);
+AppDiag_ReturnType AppDiag_PrepareTesterPresent(
+    AppDiag_ContextType *context,
+    uint8_t suppressResponse);
 
-/**
- * @brief Copies the prepared request for transport transmission.
- * @param context Initialized application context.
- * @param buffer Destination request buffer.
- * @param bufferCapacity Destination capacity.
- * @param requestLength Destination for the request length.
- * @return APP_DIAG_E_OK or an application error.
- */
 AppDiag_ReturnType AppDiag_GetPreparedRequest(
     const AppDiag_ContextType *context,
     uint8_t *buffer,
     uint16_t bufferCapacity,
     uint16_t *requestLength);
 
-/**
- * @brief Marks the prepared request as accepted by the transport layer.
- * @param context Initialized application context.
- * @return APP_DIAG_E_OK or a validation/state error.
- */
 AppDiag_ReturnType AppDiag_NotifyRequestTransmitted(
     AppDiag_ContextType *context);
 
-/**
- * @brief Validates and stores a complete UDS response.
- * @param context Initialized application context waiting for a response.
- * @param response Complete positive or negative UDS response.
- * @param responseLength Number of response bytes.
- * @return APP_DIAG_E_OK or a validation/response error.
- */
-AppDiag_ReturnType AppDiag_RxIndication(AppDiag_ContextType *context,
-                                        const uint8_t *response,
-                                        uint16_t responseLength);
+AppDiag_ReturnType AppDiag_RxIndication(
+    AppDiag_ContextType *context,
+    const uint8_t *response,
+    uint16_t responseLength);
+
+AppDiag_ReturnType AppDiag_GetResponse(
+    const AppDiag_ContextType *context,
+    uint8_t *buffer,
+    uint16_t bufferCapacity,
+    uint16_t *responseLength);
+
+AppDiag_ReturnType AppDiag_ClearResponse(
+    AppDiag_ContextType *context);
+
+/*----------------------------------------------------------------------------
+ * Complete Diagnostic Tester application API
+ *--------------------------------------------------------------------------*/
 
 /**
- * @brief Copies the stored UDS response.
- * @param context Initialized application context.
- * @param buffer Destination response buffer.
- * @param bufferCapacity Destination capacity.
- * @param responseLength Destination for the response length.
- * @return APP_DIAG_E_OK or a validation/state/buffer error.
+ * @brief Initialise AppDiag, ISO-TP tester transport and UART command input.
  */
-AppDiag_ReturnType AppDiag_GetResponse(const AppDiag_ContextType *context,
-                                       uint8_t *buffer,
-                                       uint16_t bufferCapacity,
-                                       uint16_t *responseLength);
+void AppDiag_TesterInit(void);
+void Diag_PrintMainMenu(void);
+void Diag_HandleCommand(uint8_t command);
+void Diag_ProcessCan(void);
 
 /**
- * @brief Releases the stored response and returns to idle.
- * @param context Initialized application context.
- * @return APP_DIAG_E_OK or a validation/state error.
+ * @brief Cyclic Diagnostic Tester task.
+ *
+ * Call continuously from main loop. It processes UART commands, CAN RX,
+ * ISO-TP state/timers and application response timeout.
  */
-AppDiag_ReturnType AppDiag_ClearResponse(AppDiag_ContextType *context);
-
+void AppDiag_MainFunction(void);
 #endif /* APP_DIAG_H */
