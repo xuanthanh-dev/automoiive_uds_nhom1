@@ -1011,22 +1011,10 @@ void Diag_ProcessCan(void)
                frame,
                &dlc) == OK)
     {
-    	printf("[DIAG CAN RX] ID=0x%03lX DLC=%u "
-    	           "DATA=%02X %02X %02X %02X %02X %02X %02X %02X\r\n",
-    	           canId,
-    	           dlc,
-    	           frame[0],
-    	           frame[1],
-    	           frame[2],
-    	           frame[3],
-    	           frame[4],
-    	           frame[5],
-    	           frame[6],
-    	           frame[7]);
+
 
         if (canId == DIAG_CAN_ID_RESPONSE)
         {
-        	printf("[DIAG CAN RX] -> ISO-TP\r\n");
             isoStatus = IsoTp_OnCanFrame(frame, dlc, now);
 
             if ((isoStatus != ISOTP_OK) && (isoStatus != ISOTP_BUSY))

@@ -29,6 +29,13 @@
 #define ISOTP_CF_MAX_PAYLOAD        (7u)   /* Consecutive Frame chua 7 byte   */
 #define ISOTP_MAX_MESSAGE_SIZE      (64u)  /* Do dai payload lon nhat ho tro  */
 
+/*
+ * Demonstrator compatibility mode. Set to 0 when the peer cannot return
+ * Flow Control frames reliably; multi-frame data is still sent as FF + CF.
+ * Set to 1 for standard ISO 15765-2 Flow Control behaviour.
+ */
+#define ISOTP_USE_FLOW_CONTROL      (0u)
+
 /*----------------------------------------------------------------------------
  * Ma loai frame (4 bit cao cua byte dau tien - PCI type)
  *--------------------------------------------------------------------------*/
@@ -126,8 +133,9 @@ typedef enum
  *--------------------------------------------------------------------------*/
 typedef enum
 {
-    ISOTP_RX_IDLE         = 0u,  /* Khong nhan                       */
-    ISOTP_RX_RECEIVING_CF = 1u   /* Da nhan FF, dang cho Consecutive */
+    ISOTP_RX_IDLE         = 0u,  /* Khong nhan                              */
+    ISOTP_RX_WAIT_FC_TX   = 1u,  /* Da nhan FF, dang retry gui Flow Control */
+    ISOTP_RX_RECEIVING_CF = 2u   /* Da gui FC, dang cho Consecutive Frame   */
 } IsoTp_RxStateType;
 
 /*----------------------------------------------------------------------------
